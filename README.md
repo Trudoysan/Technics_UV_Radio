@@ -2,5 +2,5 @@
 
 ## Rebuild of Technics SH 9020
 
-Added Internet radio
+Added Internet Radio\
 Added Frequency Analyzer
