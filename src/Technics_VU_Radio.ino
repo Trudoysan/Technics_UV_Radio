@@ -13,6 +13,7 @@
 #include <arduinoFFT.h>
 //#include <SPI.h>
 
+//add BLE modul
 
 //#define DEBUG
 #define AUDIO_IN_PIN 35  // Signal in on this pin
