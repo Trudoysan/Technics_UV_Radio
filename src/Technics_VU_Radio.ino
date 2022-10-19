@@ -15,22 +15,31 @@
 
 
 //#define DEBUG
+
+//BLE - ON/OFF (BLUE)
+//VU - jas up, down, vyska up, down, on/off páčkou
+//radio - ON/OFF(YELLOW/other), BAR(GREEN), TOP (RED), stanice up, down
+
 #define AUDIO_IN_PIN 35  // Signal in on this pin
 
 #define WS_PIN 13
-#define ST_UP_PIN 16     // In
-#define ST_DOWN_PIN 17   // In
-#define TOP_PIN 18       // In
-#define BAR_PIN 32       // In
-#define LVL_UP_PIN 33    // In
-#define LVL_DOWN_PIN 34  // In
-#define RADIO_PIN 23
-int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
-#define NUM_BUTTONS 4
+//#define SONG_PIN 36
+#define ST_UP_PIN 16       // In
+#define ST_DOWN_PIN 17     // In
+#define LIGHT_UP_PIN 18    // In
+#define LIGHT_DOWN_PIN 19  // In
+#define TOP_PIN 34         // In
+#define BAR_PIN 33          // In
+#define LVL_UP_PIN 36      // In
+#define LVL_DOWN_PIN 39    // In
+#define RADIO_PIN 4
+int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LIGHT_UP_PIN, LIGHT_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
+#define NUM_BUTTONS 6 
 
-#define BAR_LED_PIN 19  // Out
+//#define SONG_LED_PIN 4  // Out
+#define BAR_LED_PIN 22  // Out
 #define TOP_LED_PIN 21  // Out
-#define RADIO_PIN_LED 22
+#define RADIO_PIN_LED 23
 
 // Digital I/O used
 #define I2S_DOUT 26  // DIN connection
@@ -48,13 +57,13 @@ int infolnc = 0;  //stores channel number for tuner
 
 bool bar, top, radioOn;
 
-#define NUM_BANDS 8  // To change this, you will need to change the bunch of if statements describing the mapping from bins to bands
-#define NOISE 500    // Used as a crude noise filter, values below this are ignored
+#define NUM_BANDS 10  // To change this, you will need to change the bunch of if statements describing the mapping from bins to bands
+#define NOISE 500     // Used as a crude noise filter, values below this are ignored
 
 //const uint8_t kMatrixWidth = 16;                 // Matrix width
 //const uint8_t kMatrixHeight = 16;                // Matrix height
-const uint8_t kMatrixWidth = 8;                  // Matrix width
-const uint8_t kMatrixHeight = 15;                // Matrix height
+const uint8_t kMatrixWidth = NUM_BANDS;          // Matrix width
+const uint8_t kMatrixHeight = 18;                // Matrix height
 #define NUM_LEDS (kMatrixWidth * kMatrixHeight)  // Total number of LEDs
 
 #define TOP (kMatrixHeight - 0)  // Don't allow the bars to go offscreen
@@ -72,8 +81,8 @@ unsigned long newTime, lastPeakTime = 0L;
 arduinoFFT FFT = arduinoFFT(vReal, vImag, SAMPLES, SAMPLING_FREQ);
 
 
-#define SSID "****"
-#define PSK "****"
+#define SSID "Hlava"
+#define PSK "hlavouni"
 
 #define STATIONS 15
 char *stationlist[STATIONS] = {
@@ -96,6 +105,8 @@ char *stationlist[STATIONS] = {
   "https://samcloud.spacial.com/api/listen?sid=111415&rid=194939&f=mp3,any&br=128000,any&m=sc",
   "https://0n-80s.radionetz.de/0n-80s.mp3"
 };
+
+char msg[50];
 
 void setup() {
   Serial.begin(115200);
@@ -134,7 +145,7 @@ void setup() {
       else if (error == OTA_END_ERROR) Serial.println("End Failed");
     });
   ArduinoOTA.begin();
- 
+
   Serial.println("Ready");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
@@ -175,28 +186,47 @@ void setup() {
 void loop() {
   ArduinoOTA.handle();
   audio.loop();
+  songRefresh();
   //buttonCheck();
 
-  static unsigned long cas3 = millis();
+  /* static unsigned long cas3 = millis();
   if (millis() - cas3 > 30000) {
     stationUpDown(1);
     cas3 = millis();
     //  pixels.setPixelColor(infolnc, pixels.Color(0, 127, 255));
     //  pixels.show();
   }
-  /*
+  */
   static unsigned long cas2 = millis();
   static int led = 0;
-  if (millis() - cas2 > 1000) {
-    pixels.clear();
-    pixels.setPixelColor(led, pixels.Color(0, 255, 255));
+  if (millis() - cas2 > 100) {
+    if (!(led / 18))
+      pixels.clear();
+    //pixels.setPixelColor(led, pixels.Color(255, 255, 255));
+    int ledMod3 = led % 3;
+    pixels.setPixelColor(led / 3, pixels.Color(ledMod3 ? 0 : 127, (ledMod3 - 1) ? 0 : 127, (ledMod3 - 2) ? 0 : 127));
     pixels.show();
-    led++;
-    if (led > 30) led = 0;
+    led += 3;
+    if (led > NUM_LEDS / 3) led = 0;
     cas2 = millis();
     Serial.println(led);
-  }*/
+  }
 
+  /* static unsigned long cas4 = millis();
+  static int colorDef = 0;
+  if (millis() - cas4 > 1000) {
+    pixels.clear();
+    if (colorDef)
+      pixels.fill(pixels.Color(255, 255, 255));
+    else
+      pixels.fill(pixels.Color(0, 0, 0));
+    pixels.show();
+    colorDef++;
+    if (colorDef > 1) colorDef = 0;
+    cas4 = millis();
+    Serial.println(colorDef);
+  }*/
+  /*
   // Reset bandValues[]
   for (int i = 0; i < NUM_BANDS; i++) {
     bandValues[i] = 0;
@@ -230,6 +260,34 @@ void loop() {
       if (i > 55 && i <= 112) bandValues[5] += (int)vReal[i];
       if (i > 112 && i <= 229) bandValues[6] += (int)vReal[i];
       if (i > 229) bandValues[7] += (int)vReal[i];
+
+      //2,4,7,12,21,38,72,138,240
+
+            //10 bands, 12kHz top band
+      if (i <= 2) bandValues[0] += (int)vReal[i];
+      if (i > 2 && i <= 4) bandValues[1] += (int)vReal[i];
+      if (i > 4 && i <= 7) bandValues[2] += (int)vReal[i];
+      if (i > 7 && i <= 12) bandValues[3] += (int)vReal[i];
+      if (i > 12 && i <= 21) bandValues[4] += (int)vReal[i];
+      if (i > 21 && i <= 38) bandValues[5] += (int)vReal[i];
+      if (i > 38 && i <= 72) bandValues[6] += (int)vReal[i];
+      if (i > 72 && i <= 138) bandValues[6] += (int)vReal[i];
+      if (i > 138 && i <= 240) bandValues[6] += (int)vReal[i];
+      if (i > 240) bandValues[7] += (int)vReal[i];
+
+      https://stackoverflow.com/questions/10160439/the-way-to-extract-10-band-equalization-information-from-mp3-format
+
+40000/512= 39
+1: 0-0
+2: 1-1
+3: 2-3
+4: 4-7
+5: 8-15
+6: 16-31
+7: 32-63
+8: 64-127
+9: 128-255
+10: 256-512
     }
   }
 
@@ -271,6 +329,7 @@ void loop() {
       if (peak[band] > 0) peak[band] -= 1;
   }
   lastPeakTime = nowMillisTime;
+  */
 }
 
 int lastButtonState[NUM_BUTTONS], buttonState[NUM_BUTTONS];
@@ -296,6 +355,12 @@ void buttonCheck() {
               break;
             case 1:  //ST_DOWN_PIN
               stationUpDown(-1);
+              break;
+            case 2:  //LIGHT_UP_PIN
+              //
+              break;
+            case 3:  //LIGHT_DOWN_PIN
+              //
               break;
             case 4:  //LVL_UP_PIN
               VUsetting(LVL_UP_PIN);
@@ -372,6 +437,35 @@ void stationUpDown(int upDown) {
   Serial.println(infolnc);
 }
 
+//FONT DEFENITION
+extern byte alphabets[][16];
+
+int msgLength = 0;
+void songRefresh(void) {
+  static int currTextNo = 0;
+  static unsigned long songTime = millis();
+
+  if (millis() - songTime > 50) {
+    if (msgLength) {
+      if (currTextNo) {
+        //uz neco nakresleno, to posun a dokresli
+      } else {
+        // prvni sloupec
+      }
+    } else {
+      //test, zda oz odrolovano
+      //pokud ne, odroluj
+    }
+    songTime = millis();
+  }
+}
+
+void scrollText(char *info) {
+  /*int alphabetIndex = msg[charIndex] - '@';
+   if (alphabetIndex < 0) alphabetIndex=0;
+   */
+}
+
 // optional
 /*void audio_info(const char *info) {
   Serial.print("info        ");
@@ -396,6 +490,9 @@ void audio_showstreaminfo(const char *info) {
 void audio_showstreamtitle(const char *info) {
   Serial.print("streamtitle ");
   Serial.println(info);
+  msgLength = max(strlen(info), sizeof(msg) - 1);
+  strncpy(msg, info, msgLength);
+  msg[msgLength] = '\0';
 }
 void audio_bitrate(const char *info) {
   Serial.print("bitrate     ");
@@ -417,35 +514,3 @@ void audio_eof_speech(const char *info) {
   Serial.print("eof_speech  ");
   Serial.println(info);
 }
-
-
-/*
-void setup() {
-  digitalWrite(BAR_LED_PIN, HIGH);
-
-  digitalWrite(TOP_LED_PIN, HIGH);
-
-  radioOn = 1;
-}
-
-void loop() {
-
-  
-#ifdef DEBUG
-  static unsigned long cas2 = millis();
-  static int band2 = NUM_BANDS - 1;
-  if (millis() - cas2 > 3000) {
-    mx.setRow(0, band2, B00000000);
-    mx.setRow(1, band2, B00000000);
-    band2++;
-    if (band2 >= NUM_BANDS) band2 = 0;
-    Serial.print("Band: ");
-    Serial.println(band2);
-    mx.setRow(0, band2, B11111111);
-    mx.setRow(1, band2, B11111111);
-    cas2 = millis();
-  }
-#endif
-
-
-}*/
