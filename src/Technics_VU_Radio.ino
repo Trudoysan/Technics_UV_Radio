@@ -23,7 +23,7 @@
 #define AUDIO_IN_PIN 35  // Signal in on this pin - ADC1_CHANNEL_7
 
 #define WS_PIN 13
-//#define SONG_PIN 36
+#define VU_PIN 35
 #define ST_UP_PIN 16       // In
 #define ST_DOWN_PIN 17     // In
 #define LIGHT_UP_PIN 18    // In
@@ -36,7 +36,6 @@
 int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LIGHT_UP_PIN, LIGHT_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
 #define NUM_BUTTONS 6 
 
-//#define SONG_LED_PIN 4  // Out
 #define BAR_LED_PIN 22  // Out
 #define TOP_LED_PIN 21  // Out
 #define RADIO_PIN_LED 23
@@ -56,7 +55,7 @@ Preferences pref;
 int infolnc = 0;  //stores channel number for tuner
 int ledBrightness = 127; //store led Brightness, maybe different for different colours?
 
-bool bar=1, top=1, radioOn;
+bool bar=1, top=1, radioOn, VUon;
 
 #define NUM_BANDS 10  // To change this, you will need to change the bunch of if statements describing the mapping from bins to bands
 #define NOISE 500     // Used as a crude noise filter, values below this are ignored
@@ -185,13 +184,19 @@ void setup() {
 
   pixels.begin();  // INITIALIZE NeoPixel strip object (REQUIRED)
   pixels.clear();
+
+
+  //for testing
+radioOn = 0;
+VUon = 1;
+
 }
 
 
 void loop() {
   ArduinoOTA.handle();
   audio.loop();
-  songRefresh();
+  //songRefresh();
   //buttonCheck();
 
   /* static unsigned long cas3 = millis();
@@ -202,6 +207,7 @@ void loop() {
     //  pixels.show();
   }
   */
+ if (VUon){
   static unsigned long cas2 = millis();
   static int led = 0;
   if (millis() - cas2 > 100) {
@@ -336,6 +342,7 @@ void loop() {
   }
   lastPeakTime = nowMillisTime;
   */
+ }
 }
 
 int lastButtonState[NUM_BUTTONS], buttonState[NUM_BUTTONS];
@@ -406,6 +413,9 @@ void buttonCheck() {
     else
       digitalWrite(BAR_LED_PIN, LOW);
   }
+  if (VUon != digitalRead(VU_PIN)) {
+    VUon = !VUon;
+    if (!bar) pixels.clear();
 }
 
 void ledLightSetting(int pinNumber) {
@@ -464,32 +474,74 @@ void stationUpDown(int upDown) {
 }
 
 //FONT DEFENITION
-extern byte alphabets[][16];
+extern byte alphabets[][16]=
+{{b00000000,
+  b00000000,
+  b00000000,
+  b00000000,
+  b00000000,
+  b00000000,
+  b00000000,
+  b00000000, //8
+  b00000000,
+  b00000000,
+  b00000000,
+  b00000000,
+  b00000000,
+  b00000000,
+  b00000000,
+  b00000000 
+  },
+ {b00011000,
+  b00011000,
+  b00011000,
+  b00111100,
+  b00111100,
+  b00111100,
+  b00100100,
+  b00100100, //8
+  b01100110,
+  b01111110,
+  b01111110,
+  b01100110,
+  b01100110,
+  b01000010,
+  b11000011,
+  b11000011
+  }};
 
-int msgLength = 0;
+void drawLineT(int bar, char pismeno, int sloupec) {
+  int alphabetIndex = msg[pismeno] - '@';
+   if (alphabetIndex < 0) alphabetIndex=0;
+   
+  for(int i = 0, i<18/3,i+=3){ //draw one band/bar  (INPUT >> N) & 1;
+    pixels.setPixelColor(bar*18 + i, pixels.Color(
+                                        ((alphabet[alphabetIndex][i]>>(7-sloupec)) & 1) ? ledBrightness : 0,
+                                        ((alphabet[alphabetIndex][i+1]>>(7-sloupec)) & 1) ? ledBrightness : 0,
+                                        ((alphabet[alphabetIndex][i+2]>>(7-sloupec)) & 1) ? ledBrightness : 0));
+  }
+}
+int currCulNo = 0;
 void songRefresh(void) {
-  static int currTextNo = 0;
+  static int currCulNoAct = 0;
   static unsigned long songTime = millis();
-
+if (currCulNo){
   if (millis() - songTime > 50) {
-    if (msgLength) {
-      if (currTextNo) {
-        //uz neco nakresleno, to posun a dokresli
-      } else {
-        // prvni sloupec
+    pixel.clear();
+    if (currCulNo>currCulNoAct) {
+      for(int i = 0, i<NUM_BANDS,i++){
+        drawLineT(i, msg[(currCulNoAct - NUM_BANDS + 1 + i)/10], (currCulNoAct - NUM_BANDS + 1 + i)%10);
       }
     } else {
+      currCulNo = 0;
       //test, zda oz odrolovano
       //pokud ne, odroluj
     }
+    pixels.show();
+    currCulNoAct++;
     songTime = millis();
   }
-}
-
-void scrollText(char *info) {
-  /*int alphabetIndex = msg[charIndex] - '@';
-   if (alphabetIndex < 0) alphabetIndex=0;
-   */
+  }
 }
 
 // optional
@@ -516,9 +568,10 @@ void audio_showstreaminfo(const char *info) {
 void audio_showstreamtitle(const char *info) {
   Serial.print("streamtitle ");
   Serial.println(info);
-  msgLength = max(strlen(info), sizeof(msg) - 1);
+  int msgLength = max(strlen(info), sizeof(msg) - 1);
   strncpy(msg, info, msgLength);
   msg[msgLength] = '\0';
+  currCulNo = msgLength*10;
   Serial.print("msg ");
   Serial.println(msg);
 }
