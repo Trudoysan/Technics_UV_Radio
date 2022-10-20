@@ -516,6 +516,7 @@ void audio_showstreamtitle(const char *info) {
   msgLength = max(strlen(info), sizeof(msg) - 1);
   strncpy(msg, info, msgLength);
   msg[msgLength] = '\0';
+  Serial.print("msg ");
   Serial.println(msg);
 }
 void audio_bitrate(const char *info) {
