@@ -29,12 +29,12 @@
 #define LIGHT_UP_PIN 18    // In
 #define LIGHT_DOWN_PIN 19  // In
 #define TOP_PIN 34         // In
-#define BAR_PIN 33          // In
+#define BAR_PIN 33         // In
 #define LVL_UP_PIN 36      // In
 #define LVL_DOWN_PIN 39    // In
 #define RADIO_PIN 4
 int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LIGHT_UP_PIN, LIGHT_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
-#define NUM_BUTTONS 6 
+#define NUM_BUTTONS 6
 
 #define BAR_LED_PIN 22  // Out
 #define TOP_LED_PIN 21  // Out
@@ -47,15 +47,15 @@ int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LIGHT_UP_PIN, LIGHT_DOWN_PIN, LVL_U
 
 #define SAMPLES 1024         // Must be a power of 2
 #define SAMPLING_FREQ 40000  // Hz, must be 40000 or less due to ADC conversion time. Determines maximum frequency that can be analysed by the FFT Fmax=sampleF/2.
-int amplitude = 1000;               // Depending on your audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
+int amplitude = 1000;        // Depending on your audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
 
 Audio audio;
 
 Preferences pref;
-int infolnc = 0;  //stores channel number for tuner
-int ledBrightness = 127; //store led Brightness, maybe different for different colours?
+int infolnc = 0;          //stores channel number for tuner
+int ledBrightness = 127;  //store led Brightness, maybe different for different colours?
 
-bool bar=1, top=1, radioOn, VUon;
+bool bar = 1, top = 1, radioOn, VUon;
 
 #define NUM_BANDS 10  // To change this, you will need to change the bunch of if statements describing the mapping from bins to bands
 #define NOISE 500     // Used as a crude noise filter, values below this are ignored
@@ -81,8 +81,8 @@ unsigned long newTime, lastPeakTime = 0L;
 arduinoFFT FFT = arduinoFFT(vReal, vImag, SAMPLES, SAMPLING_FREQ);
 
 
-#define SSID "****"
-#define PSK "****"
+#define SSID "Hlava"
+#define PSK "hlavouni"
 
 #define STATIONS 15
 char *stationlist[STATIONS] = {
@@ -154,12 +154,12 @@ void setup() {
   pref.begin("radio", false);
   //set current amplitude
   if (pref.isKey("amplitude")) amplitude = pref.getUShort("amplitude");
-  if(amplitude<10) amplitude = 10;
-    //set current ledBrightness
+  if (amplitude < 10) amplitude = 10;
+  //set current ledBrightness
   if (pref.isKey("ledBrightness")) ledBrightness = pref.getUShort("ledBrightness");
-  if(ledBrightness>255) ledBrightness = 255;
-  if(ledBrightness<10) ledBrightness = 10;
-    //set current station to saved value if available
+  if (ledBrightness > 255) ledBrightness = 255;
+  if (ledBrightness < 10) ledBrightness = 10;
+  //set current station to saved value if available
   if (pref.isKey("station")) infolnc = pref.getUShort("station");
   if (infolnc >= STATIONS) infolnc = 0;
 
@@ -187,9 +187,8 @@ void setup() {
 
 
   //for testing
-radioOn = 0;
-VUon = 1;
-
+  radioOn = 0;
+  VUon = 1;
 }
 
 
@@ -207,23 +206,24 @@ void loop() {
     //  pixels.show();
   }
   */
- if (VUon){
-  static unsigned long cas2 = millis();
-  static int led = 0;
-  if (millis() - cas2 > 100) {
-    if (!(led / 18))
-      pixels.clear();
-    //pixels.setPixelColor(led, pixels.Color(ledBrightness, ledBrightness, ledBrightness));
-    int ledMod3 = led % 3;
-    pixels.setPixelColor(led / 3, pixels.Color(ledMod3 ? 0 : ledBrightness, (ledMod3 - 1) ? 0 : ledBrightness, (ledMod3 - 2) ? 0 : ledBrightness));
-    pixels.show();
-    led += 3;
-    if (led > NUM_LEDS / 3) led = 0;
-    cas2 = millis();
-    //Serial.println(led);
-  }
+  if (VUon) {
+    static unsigned long cas2 = millis();
+    static int led = 0;
+    if (millis() - cas2 > 100) {
+      if (!(led % 18))
+        pixels.clear();
+      int ledMod3 = led % 3;
+      pixels.setPixelColor(led / 3, pixels.Color(ledBrightness, (ledMod3 >= 1) ? ledBrightness : 0, (ledMod3 = 2) ? ledBrightness : 0));
+      //pixels.setPixelColor(led/3, pixels.Color(ledBrightness,ledBrightness,ledBrightness));
 
-  /* static unsigned long cas4 = millis();
+      pixels.show();
+      led++;
+      if (led > NUM_LEDS) led = 0;
+      cas2 = millis();
+      //Serial.print(led);
+    }
+
+    /*  static unsigned long cas4 = millis();
   static int colorDef = 0;
   if (millis() - cas4 > 1000) {
     pixels.clear();
@@ -237,7 +237,7 @@ void loop() {
     cas4 = millis();
     Serial.println(colorDef);
   }*/
-  /*
+    /*
   // Reset bandValues[]
   for (int i = 0; i < NUM_BANDS; i++) {
     bandValues[i] = 0;
@@ -342,7 +342,7 @@ void loop() {
   }
   lastPeakTime = nowMillisTime;
   */
- }
+  }
 }
 
 int lastButtonState[NUM_BUTTONS], buttonState[NUM_BUTTONS];
@@ -416,8 +416,8 @@ void buttonCheck() {
   if (VUon != digitalRead(VU_PIN)) {
     VUon = !VUon;
     if (!bar) pixels.clear();
+  }
 }
-
 void ledLightSetting(int pinNumber) {
   switch (pinNumber) {
     case LIGHT_UP_PIN:
@@ -474,73 +474,70 @@ void stationUpDown(int upDown) {
 }
 
 //FONT DEFENITION
-extern byte alphabets[][16]=
-{{b00000000,
-  b00000000,
-  b00000000,
-  b00000000,
-  b00000000,
-  b00000000,
-  b00000000,
-  b00000000, //8
-  b00000000,
-  b00000000,
-  b00000000,
-  b00000000,
-  b00000000,
-  b00000000,
-  b00000000,
-  b00000000 
-  },
- {b00011000,
-  b00011000,
-  b00011000,
-  b00111100,
-  b00111100,
-  b00111100,
-  b00100100,
-  b00100100, //8
-  b01100110,
-  b01111110,
-  b01111110,
-  b01100110,
-  b01100110,
-  b01000010,
-  b11000011,
-  b11000011
-  }};
+extern byte alphabets[][16] = { { B00000000,
+                                  B00000000,
+                                  B00000000,
+                                  B00000000,
+                                  B00000000,
+                                  B00000000,
+                                  B00000000,
+                                  B00000000,  //8
+                                  B00000000,
+                                  B00000000,
+                                  B00000000,
+                                  B00000000,
+                                  B00000000,
+                                  B00000000,
+                                  B00000000,
+                                  B00000000 },
+                                { B00011000,
+                                  B00011000,
+                                  B00011000,
+                                  B00111100,
+                                  B00111100,
+                                  B00111100,
+                                  B00100100,
+                                  B00100100,  //8
+                                  B01100110,
+                                  B01111110,
+                                  B01111110,
+                                  B01100110,
+                                  B01100110,
+                                  B01000010,
+                                  B11000011,
+                                  B11000011 } };
 
 void drawLineT(int bar, char pismeno, int sloupec) {
   int alphabetIndex = msg[pismeno] - '@';
-   if (alphabetIndex < 0) alphabetIndex=0;
-   
-  for(int i = 0, i<18/3,i+=3){ //draw one band/bar  (INPUT >> N) & 1;
-    pixels.setPixelColor(bar*18 + i, pixels.Color(
-                                        ((alphabet[alphabetIndex][i]>>(7-sloupec)) & 1) ? ledBrightness : 0,
-                                        ((alphabet[alphabetIndex][i+1]>>(7-sloupec)) & 1) ? ledBrightness : 0,
-                                        ((alphabet[alphabetIndex][i+2]>>(7-sloupec)) & 1) ? ledBrightness : 0));
+  if (alphabetIndex < 0) alphabetIndex = 0;
+
+  for (int i = 0; i < 18 / 3; i += 3) {  //draw one band/bar  (INPUT >> N) & 1;
+    pixels.setPixelColor(bar * 18 + i, pixels.Color(
+                                         ((alphabets[alphabetIndex][i] >> (7 - sloupec)) & 1) ? ledBrightness : 0,
+                                         ((alphabets[alphabetIndex][i + 1] >> (7 - sloupec)) & 1) ? ledBrightness : 0,
+                                         ((alphabets[alphabetIndex][i + 2] >> (7 - sloupec)) & 1) ? ledBrightness : 0));
   }
 }
 int currCulNo = 0;
 void songRefresh(void) {
   static int currCulNoAct = 0;
   static unsigned long songTime = millis();
-if (currCulNo){
-  if (millis() - songTime > 50) {
-    pixel.clear();
-    if (currCulNo>currCulNoAct) {
-      for(int i = 0, i<NUM_BANDS,i++){
-        drawLineT(i, msg[(currCulNoAct - NUM_BANDS + 1 + i)/10], (currCulNoAct - NUM_BANDS + 1 + i)%10);
+  if (currCulNo) {
+    if (millis() - songTime > 50) {
+      pixels.clear();
+      if (currCulNo > currCulNoAct) {
+        for (int i = 0; i < NUM_BANDS; i++) {
+          drawLineT(i, msg[(currCulNoAct - NUM_BANDS + 1 + i) / 10], (currCulNoAct - NUM_BANDS + 1 + i) % 10);
+        }
+      } else {
+        currCulNo = 0;
+        //test, zda oz odrolovano
+        //pokud ne, odroluj
       }
-    } else {
-      currCulNo = 0;
-      //test, zda oz odrolovano
-      //pokud ne, odroluj
+      pixels.show();
+      currCulNoAct++;
+      songTime = millis();
     }
-    pixels.show();
-    currCulNoAct++;
-    songTime = millis();
-  }
   }
 }
 
@@ -571,7 +568,7 @@ void audio_showstreamtitle(const char *info) {
   int msgLength = max(strlen(info), sizeof(msg) - 1);
   strncpy(msg, info, msgLength);
   msg[msgLength] = '\0';
-  currCulNo = msgLength*10;
+  currCulNo = msgLength * 10;
   Serial.print("msg ");
   Serial.println(msg);
 }
