@@ -17,10 +17,10 @@
 //#define DEBUG
 
 //BLE - ON/OFF (BLUE)
-//VU - jas up, down, vyska up, down, on/off páčkou
-//radio - ON/OFF(YELLOW/other), BAR(GREEN), TOP (RED), stanice up, down
+//VU - brightness up, down, bar level  up, down, on/off by switch
+//radio - ON/OFF(YELLOW/other), BAR(GREEN), TOP (RED), station up, down
 
-#define AUDIO_IN_PIN 35  // Signal in on this pin
+#define AUDIO_IN_PIN 35  // Signal in on this pin - ADC1_CHANNEL_7
 
 #define WS_PIN 13
 //#define SONG_PIN 36
@@ -177,6 +177,8 @@ void setup() {
   pinMode(BAR_PIN, INPUT_PULLUP);
   pinMode(RADIO_PIN, INPUT_PULLUP);
   pinMode(AUDIO_IN_PIN, INPUT);  // Signal in on this pin
+  //adc1_config_width(ADC_WIDTH_BIT_12);
+  //adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11);
   pinMode(BAR_LED_PIN, OUTPUT);
   pinMode(TOP_LED_PIN, OUTPUT);
   pinMode(RADIO_PIN_LED, OUTPUT);
@@ -239,6 +241,7 @@ void loop() {
   for (int i = 0; i < SAMPLES; i++) {
     newTime = micros();
     vReal[i] = analogRead(AUDIO_IN_PIN);  // A conversion takes about 9.7uS on an ESP32
+    //vReal[i] = adc1_get_raw(ADC1_CHANNEL_7);
     vImag[i] = 0;
     while ((micros() - newTime) < sampling_period_us) {
     }
