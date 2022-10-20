@@ -48,14 +48,15 @@ int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LIGHT_UP_PIN, LIGHT_DOWN_PIN, LVL_U
 
 #define SAMPLES 1024         // Must be a power of 2
 #define SAMPLING_FREQ 40000  // Hz, must be 40000 or less due to ADC conversion time. Determines maximum frequency that can be analysed by the FFT Fmax=sampleF/2.
-int amplitude;               // Depending on your audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
+int amplitude = 1000;               // Depending on your audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
 
 Audio audio;
 
 Preferences pref;
 int infolnc = 0;  //stores channel number for tuner
+int ledBrightness = 127; //store led Brightness, maybe different for different colours?
 
-bool bar, top, radioOn;
+bool bar=1, top=1, radioOn;
 
 #define NUM_BANDS 10  // To change this, you will need to change the bunch of if statements describing the mapping from bins to bands
 #define NOISE 500     // Used as a crude noise filter, values below this are ignored
@@ -72,17 +73,17 @@ Adafruit_NeoPixel pixels(NUM_LEDS / 3, WS_PIN, NEO_GRB + NEO_KHZ800);
 
 // Sampling and FFT stuff
 unsigned int sampling_period_us;
-byte peak[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };  // The length of these arrays must be >= NUM_BANDS
-int oldBarHeights[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-int bandValues[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+byte peak[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };  // The length of these arrays must be >= NUM_BANDS
+int oldBarHeights[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+int bandValues[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 double vReal[SAMPLES];
 double vImag[SAMPLES];
 unsigned long newTime, lastPeakTime = 0L;
 arduinoFFT FFT = arduinoFFT(vReal, vImag, SAMPLES, SAMPLING_FREQ);
 
 
-#define SSID "Hlava"
-#define PSK "hlavouni"
+#define SSID "****"
+#define PSK "****"
 
 #define STATIONS 15
 char *stationlist[STATIONS] = {
@@ -146,16 +147,23 @@ void setup() {
     });
   ArduinoOTA.begin();
 
-  Serial.println("Ready");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
   Serial.println("WIFI Started");
 
   //start preferences instance
   pref.begin("radio", false);
-  //set current station to saved value if available
+  //set current amplitude
+  if (pref.isKey("amplitude")) amplitude = pref.getUShort("amplitude");
+  if(amplitude<10) amplitude = 10;
+    //set current ledBrightness
+  if (pref.isKey("ledBrightness")) ledBrightness = pref.getUShort("ledBrightness");
+  if(ledBrightness>255) ledBrightness = 255;
+  if(ledBrightness<10) ledBrightness = 10;
+    //set current station to saved value if available
   if (pref.isKey("station")) infolnc = pref.getUShort("station");
   if (infolnc >= STATIONS) infolnc = 0;
+
 
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(21);  // 0...21
@@ -175,11 +183,6 @@ void setup() {
 
   pixels.begin();  // INITIALIZE NeoPixel strip object (REQUIRED)
   pixels.clear();
-
-  amplitude = 1000;
-
-  bar = 1;
-  top = 0;
 }
 
 
@@ -202,14 +205,14 @@ void loop() {
   if (millis() - cas2 > 100) {
     if (!(led / 18))
       pixels.clear();
-    //pixels.setPixelColor(led, pixels.Color(255, 255, 255));
+    //pixels.setPixelColor(led, pixels.Color(ledBrightness, ledBrightness, ledBrightness));
     int ledMod3 = led % 3;
-    pixels.setPixelColor(led / 3, pixels.Color(ledMod3 ? 0 : 127, (ledMod3 - 1) ? 0 : 127, (ledMod3 - 2) ? 0 : 127));
+    pixels.setPixelColor(led / 3, pixels.Color(ledMod3 ? 0 : ledBrightness, (ledMod3 - 1) ? 0 : ledBrightness, (ledMod3 - 2) ? 0 : ledBrightness));
     pixels.show();
     led += 3;
     if (led > NUM_LEDS / 3) led = 0;
     cas2 = millis();
-    Serial.println(led);
+    //Serial.println(led);
   }
 
   /* static unsigned long cas4 = millis();
@@ -217,7 +220,7 @@ void loop() {
   if (millis() - cas4 > 1000) {
     pixels.clear();
     if (colorDef)
-      pixels.fill(pixels.Color(255, 255, 255));
+      pixels.fill(pixels.Color(ledBrightness, ledBrightness, ledBrightness));
     else
       pixels.fill(pixels.Color(0, 0, 0));
     pixels.show();
@@ -263,7 +266,7 @@ void loop() {
 
       //2,4,7,12,21,38,72,138,240
 
-            //10 bands, 12kHz top band
+            //10 bands
       if (i <= 2) bandValues[0] += (int)vReal[i];
       if (i > 2 && i <= 4) bandValues[1] += (int)vReal[i];
       if (i > 4 && i <= 7) bandValues[2] += (int)vReal[i];
@@ -275,7 +278,7 @@ void loop() {
       if (i > 138 && i <= 240) bandValues[6] += (int)vReal[i];
       if (i > 240) bandValues[7] += (int)vReal[i];
 
-      https://stackoverflow.com/questions/10160439/the-way-to-extract-10-band-equalization-information-from-mp3-format
+      //https://stackoverflow.com/questions/10160439/the-way-to-extract-10-band-equalization-information-from-mp3-format
 
 40000/512= 39
 1: 0-0
@@ -311,11 +314,11 @@ void loop() {
     for (int i = 0; i < TOP; i += 3) {
       //if ((barHeight > i && bar) || (peak[band] == i + 1 && top))
       pixels.setPixelColor(((band * TOP) + i) / 3,
-                           pixels.Color(((barHeight > i && bar) || (peak[band] == i + 1 && top)) ? 127 : 0,
-                                        ((barHeight > i + 1 && bar) || (peak[band] == i + 2 && top)) ? 127 : 0,
-                                        ((barHeight > i + 2 && bar) || (peak[band] == i + 3 && top)) ? 127 : 0));
+                           pixels.Color(((barHeight > i && bar) || (peak[band] == i + 1 && top)) ? ledBrightness : 0,
+                                        ((barHeight > i + 1 && bar) || (peak[band] == i + 2 && top)) ? ledBrightness : 0,
+                                        ((barHeight > i + 2 && bar) || (peak[band] == i + 3 && top)) ? ledBrightness : 0));
       //Serial.println(((band * TOP) + i) / 3);
-      //Serial.println(((barHeight > i && bar) || (peak[band] == i + 1 && top)) ? 127 : 0);
+      //Serial.println(((barHeight > i && bar) || (peak[band] == i + 1 && top)) ? ledBrightness : 0);
     }
     // Save oldBarHeights for averaging later
     oldBarHeights[band] = barHeight;
@@ -357,10 +360,10 @@ void buttonCheck() {
               stationUpDown(-1);
               break;
             case 2:  //LIGHT_UP_PIN
-              //
+              ledLightSetting(LIGHT_UP_PIN);
               break;
             case 3:  //LIGHT_DOWN_PIN
-              //
+              ledLightSetting(LIGHT_DOWN_PIN);
               break;
             case 4:  //LVL_UP_PIN
               VUsetting(LVL_UP_PIN);
@@ -390,7 +393,6 @@ void buttonCheck() {
     top = !top;
     if (top)
       digitalWrite(TOP_LED_PIN, HIGH);
-
     else
       digitalWrite(TOP_LED_PIN, LOW);
   }
@@ -398,12 +400,31 @@ void buttonCheck() {
     bar = !bar;
     if (bar)
       digitalWrite(BAR_LED_PIN, HIGH);
-
     else
       digitalWrite(BAR_LED_PIN, LOW);
   }
 }
 
+void ledLightSetting(int pinNumber) {
+  switch (pinNumber) {
+    case LIGHT_UP_PIN:
+      ledBrightness *= 1.3;
+      if (ledBrightness > 255) ledBrightness = 255;
+      break;
+    case LIGHT_DOWN_PIN:
+      ledBrightness /= 1.3;
+      if (ledBrightness < 10) ledBrightness = 10;
+      break;
+  }
+  pref.putUShort("ledBrightness", ledBrightness);
+#ifdef DEBUG
+  if (active)
+    Serial.print("Pin activated: ");
+  else
+    Serial.print("Pin deactivated: ");
+  Serial.println(pinNumber);
+#endif
+}
 
 void VUsetting(int pinNumber) {
   switch (pinNumber) {
@@ -416,6 +437,7 @@ void VUsetting(int pinNumber) {
         amplitude = 10;
       break;
   }
+  pref.putUShort("amplitude", amplitude);
 #ifdef DEBUG
   if (active)
     Serial.print("Pin activated: ");
@@ -433,8 +455,9 @@ void stationUpDown(int upDown) {
     infolnc = STATIONS - 1;
   pref.putUShort("station", infolnc);
   audio.connecttohost(stationlist[infolnc]);
-
+#ifdef DEBUG
   Serial.println(infolnc);
+#endif
 }
 
 //FONT DEFENITION
@@ -493,6 +516,7 @@ void audio_showstreamtitle(const char *info) {
   msgLength = max(strlen(info), sizeof(msg) - 1);
   strncpy(msg, info, msgLength);
   msg[msgLength] = '\0';
+  Serial.println(msg);
 }
 void audio_bitrate(const char *info) {
   Serial.print("bitrate     ");
