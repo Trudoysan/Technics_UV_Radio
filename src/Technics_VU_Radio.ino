@@ -106,6 +106,7 @@ char *stationlist[STATIONS] = {
   "https://0n-80s.radionetz.de/0n-80s.mp3"
 };
 
+int currCulNo = 0;
 char msg[50];
 
 void setup() {
@@ -206,14 +207,14 @@ void loop() {
     //  pixels.show();
   }
   */
-  if (VUon) {
+  if (VUon && !currCulNo) {
     static unsigned long cas2 = millis();
     static int led = 0;
     if (millis() - cas2 > 100) {
       if (!(led % 18))
         pixels.clear();
       int ledMod3 = led % 3;
-      pixels.setPixelColor(led / 3, pixels.Color(ledBrightness, (ledMod3 >= 1) ? ledBrightness : 0, (ledMod3 = 2) ? ledBrightness : 0));
+      pixels.setPixelColor(177 - (led / 3), pixels.Color(ledBrightness, (ledMod3 >= 1) ? ledBrightness : 0, (ledMod3 = 2) ? ledBrightness : 0));
       //pixels.setPixelColor(led/3, pixels.Color(ledBrightness,ledBrightness,ledBrightness));
 
       pixels.show();
@@ -322,7 +323,7 @@ void loop() {
     // Draw bars
     for (int i = 0; i < TOP; i += 3) {
       //if ((barHeight > i && bar) || (peak[band] == i + 1 && top))
-      pixels.setPixelColor(((band * TOP) + i) / 3,
+      pixels.setPixelColor(177-(((band * TOP) + i) / 3),
                            pixels.Color(((barHeight > i && bar) || (peak[band] == i + 1 && top)) ? ledBrightness : 0,
                                         ((barHeight > i + 1 && bar) || (peak[band] == i + 2 && top)) ? ledBrightness : 0,
                                         ((barHeight > i + 2 && bar) || (peak[band] == i + 3 && top)) ? ledBrightness : 0));
@@ -415,7 +416,7 @@ void buttonCheck() {
   }
   if (VUon != digitalRead(VU_PIN)) {
     VUon = !VUon;
-    if (!bar) pixels.clear();
+    if (!VUon) pixels.clear();
   }
 }
 void ledLightSetting(int pinNumber) {
@@ -518,7 +519,7 @@ void drawLineT(int bar, char pismeno, int sloupec) {
                                          ((alphabets[alphabetIndex][i + 2] >> (7 - sloupec)) & 1) ? ledBrightness : 0));
   }
 }
-int currCulNo = 0;
+
 void songRefresh(void) {
   static int currCulNoAct = 0;
   static unsigned long songTime = millis();
