@@ -14,31 +14,36 @@
 //#include <SPI.h>
 
 
-//#define DEBUG
+#define DEBUG
 
 //BLE - ON/OFF (BLUE)
-//VU - brightness up, down, bar level  up, down, on/off by switch
+//VU -  bar level  up, down, on/off by switch, Song name ON/OFF, Station Name ON/OFF
 //radio - ON/OFF(YELLOW/other), BAR(GREEN), TOP (RED), station up, down
 
-#define AUDIO_IN_PIN 35  // Signal in on this pin - ADC1_CHANNEL_7
-
+#define AUDIO_IN_PIN 36  // Signal in on this pin - ADC1_CHANNEL_7
 #define WS_PIN 13
-#define VU_PIN 35
-#define ST_UP_PIN 16       // In
-#define ST_DOWN_PIN 17     // In
-#define LIGHT_UP_PIN 18    // In
-#define LIGHT_DOWN_PIN 19  // In
-#define TOP_PIN 34         // In
-#define BAR_PIN 33         // In
-#define LVL_UP_PIN 36      // In
-#define LVL_DOWN_PIN 39    // In
-#define RADIO_PIN 4
-int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LIGHT_UP_PIN, LIGHT_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
-#define NUM_BUTTONS 6
 
-#define BAR_LED_PIN 22  // Out
-#define TOP_LED_PIN 21  // Out
-#define RADIO_PIN_LED 23
+#define ST_UP_PIN 32     // In
+#define ST_DOWN_PIN 33   // In
+#define LVL_UP_PIN 34    // In
+#define LVL_DOWN_PIN 35  // In
+int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
+#define NUM_BUTTONS 4
+
+#define SONG_PIN 39     // In
+#define STATION_PIN 15  // In
+
+#define VU_PIN 17      // In -
+#define VU_LED_PIN 16  // Out -
+
+#define TOP_PIN 18      // In -
+#define TOP_LED_PIN 19  // Out -
+
+#define BAR_PIN 22      // In  -
+#define BAR_LED_PIN 23  // Out -
+
+#define RADIO_PIN 14       // In
+#define RADIO_PIN_LED 12  // Out
 
 // Digital I/O used
 #define I2S_DOUT 26  // DIN connection
@@ -52,10 +57,10 @@ int amplitude = 1000;        // Depending on your audio source level, you may ne
 Audio audio;
 
 Preferences pref;
-int infolnc = 0;          //stores channel number for tuner
-int ledBrightness = 127;  //store led Brightness, maybe different for different colours?
+int infolnc = 0;         //stores channel number for tuner
+int ledBrightness = 32;  //store led Brightness, maybe different for different colours?
 
-bool bar = 1, top = 1, radioOn, VUon;
+bool bar = 1, top = 1, radioOn, VUon, songName, stationName;
 
 #define NUM_BANDS 10  // To change this, you will need to change the bunch of if statements describing the mapping from bins to bands
 #define NOISE 500     // Used as a crude noise filter, values below this are ignored
@@ -176,6 +181,8 @@ void setup() {
   pinMode(TOP_PIN, INPUT_PULLUP);
   pinMode(BAR_PIN, INPUT_PULLUP);
   pinMode(RADIO_PIN, INPUT_PULLUP);
+  pinMode(SONG_PIN, INPUT_PULLUP);
+  pinMode(STATION_PIN, INPUT_PULLUP);
   pinMode(AUDIO_IN_PIN, INPUT);  // Signal in on this pin
   //adc1_config_width(ADC_WIDTH_BIT_12);
   //adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11);
@@ -197,7 +204,7 @@ void loop() {
   ArduinoOTA.handle();
   audio.loop();
   //songRefresh();
-  //buttonCheck();
+  buttonCheck();
 
   /* static unsigned long cas3 = millis();
   if (millis() - cas3 > 30000) {
@@ -207,21 +214,22 @@ void loop() {
     //  pixels.show();
   }
   */
-  if (VUon && !currCulNo) {
+  // if (VUon && !currCulNo)
+  if (VUon) {
     static unsigned long cas2 = millis();
     static int led = 0;
     if (millis() - cas2 > 100) {
       if (!(led % 18))
         pixels.clear();
       int ledMod3 = led % 3;
-      pixels.setPixelColor(177 - (led / 3), pixels.Color(ledBrightness, (ledMod3 >= 1) ? ledBrightness : 0, (ledMod3 = 2) ? ledBrightness : 0));
+      pixels.setPixelColor(59 - (led / 3), pixels.Color((ledMod3 >= 1) ? ledBrightness : 0, ledBrightness, (ledMod3 == 2) ? ledBrightness : 0));
       //pixels.setPixelColor(led/3, pixels.Color(ledBrightness,ledBrightness,ledBrightness));
 
       pixels.show();
       led++;
       if (led > NUM_LEDS) led = 0;
       cas2 = millis();
-      //Serial.print(led);
+      //Serial.println(59 - (led / 3));
     }
 
     /*  static unsigned long cas4 = millis();
@@ -363,6 +371,10 @@ void buttonCheck() {
       if (buttonRead != buttonState[i]) {
         buttonState[i] = buttonRead;
         if (buttonRead == LOW) {
+#ifdef DEBUG
+          Serial.print("Pin: ");
+          Serial.println(i);
+#endif
           switch (i) {
             case 0:  //ST_UP_PIN
               stationUpDown(1);
@@ -370,29 +382,31 @@ void buttonCheck() {
             case 1:  //ST_DOWN_PIN
               stationUpDown(-1);
               break;
-            case 2:  //LIGHT_UP_PIN
+              /* case 2:  //LIGHT_UP_PIN
               ledLightSetting(LIGHT_UP_PIN);
               break;
             case 3:  //LIGHT_DOWN_PIN
               ledLightSetting(LIGHT_DOWN_PIN);
-              break;
-            case 4:  //LVL_UP_PIN
+              break;*/
+            case 2:  //LVL_UP_PIN
               VUsetting(LVL_UP_PIN);
               break;
-            case 5:
+            case 3:
               VUsetting(LVL_DOWN_PIN);
               break;
           }
         } else {
           if ((currentMillis - lastPlayDebounceTime[i]) > 500) {
-            Serial.print("Long press");
+#ifdef DEBUG
+            Serial.println("Long press");
+#endif
           }
         }
       }
     }
     lastButtonState[i] = buttonRead;
   }
-
+  /*
   if (radioOn != digitalRead(RADIO_PIN)) {
     radioOn = !radioOn;
     if (radioOn)
@@ -400,6 +414,22 @@ void buttonCheck() {
     else
       audio.stopSong();
   }
+   if (songName != digitalRead(SONG_PIN)) {
+    songName = !songName;
+    if (songName)
+      ;
+    else
+      ;
+  } 
+     if (stationName != digitalRead(STATION_PIN)) {
+    stationName = !stationName;
+    if (stationName)
+      ;
+    else
+      ;
+  } 
+
+  
   if (top != digitalRead(TOP_PIN)) {
     top = !top;
     if (top)
@@ -407,18 +437,27 @@ void buttonCheck() {
     else
       digitalWrite(TOP_LED_PIN, LOW);
   }
+  //bar = digitalRead(BAR_PIN);
+  //Serial.print(bar);
+*/
   if (bar != digitalRead(BAR_PIN)) {
     bar = !bar;
     if (bar)
-      digitalWrite(BAR_LED_PIN, HIGH);
-    else
       digitalWrite(BAR_LED_PIN, LOW);
+    else
+      digitalWrite(BAR_LED_PIN, HIGH);
+#ifdef DEBUG
+    Serial.print("Bar de-activated: ");
+    Serial.println(bar);
+#endif
   }
+  /*
   if (VUon != digitalRead(VU_PIN)) {
     VUon = !VUon;
     if (!VUon) pixels.clear();
-  }
+  }*/
 }
+/*
 void ledLightSetting(int pinNumber) {
   switch (pinNumber) {
     case LIGHT_UP_PIN:
@@ -432,14 +471,11 @@ void ledLightSetting(int pinNumber) {
   }
   pref.putUShort("ledBrightness", ledBrightness);
 #ifdef DEBUG
-  if (active)
-    Serial.print("Pin activated: ");
-  else
-    Serial.print("Pin deactivated: ");
+  Serial.print("Pin activated: ");
   Serial.println(pinNumber);
 #endif
 }
-
+*/
 void VUsetting(int pinNumber) {
   switch (pinNumber) {
     case LVL_UP_PIN:
@@ -453,10 +489,7 @@ void VUsetting(int pinNumber) {
   }
   pref.putUShort("amplitude", amplitude);
 #ifdef DEBUG
-  if (active)
-    Serial.print("Pin activated: ");
-  else
-    Serial.print("Pin deactivated: ");
+  Serial.print("Pin activated: ");
   Serial.println(pinNumber);
 #endif
 }
