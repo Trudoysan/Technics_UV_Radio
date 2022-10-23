@@ -9,29 +9,29 @@
 #include <Adafruit_NeoPixel.h>
 //#include <ESPmDNS.h>
 //#include <WiFiUdp.h>
-#include <ArduinoOTA.h>
+//#include <ArduinoOTA.h>
 #include <arduinoFFT.h>
 //#include <SPI.h>
 
 
-#define DEBUG
+//#define DEBUG
 
 //BLE - ON/OFF (BLUE)
 //VU -  bar level  up, down, on/off by switch, Song name ON/OFF, Station Name ON/OFF
 //radio - ON/OFF(YELLOW/other), BAR(GREEN), TOP (RED), station up, down
 
-#define AUDIO_IN_PIN 36  // Signal in on this pin - ADC1_CHANNEL_7
+//#define AUDIO_IN_PIN 36  // Signal in on this pin - ADC1_CHANNEL_0
 #define WS_PIN 13
 
 #define ST_UP_PIN 32     // In
 #define ST_DOWN_PIN 33   // In
-#define LVL_UP_PIN 34    // In
-#define LVL_DOWN_PIN 35  // In
+#define LVL_UP_PIN 21    // In xx
+#define LVL_DOWN_PIN 39  // In xx 4 nebo 5
 int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
 #define NUM_BUTTONS 4
 
-#define SONG_PIN 39     // In
-#define STATION_PIN 15  // In
+#define SONG_PIN 15  // In
+//define STATION_PIN 39  // In
 
 #define VU_PIN 17      // In -
 #define VU_LED_PIN 16  // Out -
@@ -42,7 +42,7 @@ int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
 #define BAR_PIN 22      // In  -
 #define BAR_LED_PIN 23  // Out -
 
-#define RADIO_PIN 14       // In
+#define RADIO_PIN 14      // In
 #define RADIO_PIN_LED 12  // Out
 
 // Digital I/O used
@@ -50,9 +50,10 @@ int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
 #define I2S_BCLK 27  // Bit clock
 #define I2S_LRC 25   // Left Right Clock
 
-#define SAMPLES 1024         // Must be a power of 2
+#define SAMPLES 1024  // Must be a power of 2
+//#define SAMPLES 128          // Must be a power of 2
 #define SAMPLING_FREQ 40000  // Hz, must be 40000 or less due to ADC conversion time. Determines maximum frequency that can be analysed by the FFT Fmax=sampleF/2.
-int amplitude = 1000;        // Depending on your audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
+int amplitude = 10000;       // Depending on your audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
 
 Audio audio;
 
@@ -60,7 +61,7 @@ Preferences pref;
 int infolnc = 0;         //stores channel number for tuner
 int ledBrightness = 32;  //store led Brightness, maybe different for different colours?
 
-bool bar = 1, top = 1, radioOn, VUon, songName, stationName;
+bool bar = 1, top = 1, radioOn, VUon, songName;
 
 #define NUM_BANDS 10  // To change this, you will need to change the bunch of if statements describing the mapping from bins to bands
 #define NOISE 500     // Used as a crude noise filter, values below this are ignored
@@ -91,8 +92,9 @@ arduinoFFT FFT = arduinoFFT(vReal, vImag, SAMPLES, SAMPLING_FREQ);
 
 #define STATIONS 15
 char *stationlist[STATIONS] = {
-  "http://vis.media-ice.musicradio.com/CapitalMP3",
+  "http://streaming.live365.com/b92108_128mp3",
   "https://panel.retrolandigital.com/listen/oldies_internet_radio/listen",
+  "http://vis.media-ice.musicradio.com/CapitalMP3",
   //"https://panel.retrolandigital.com/listen/80s_online_radio/listen",
   "https://radiorock.stream.laut.fm/radiorock",
   "https://media-ssl.musicradio.com/SmoothLondonMP3",
@@ -106,13 +108,131 @@ char *stationlist[STATIONS] = {
   "http://1000oldies.stream.laut.fm/1000oldies",
   "http://webradio.classicfm.dk/classichorsens",
   "http://ice55.securenetsystems.net/DASH26",
-  "http://streaming.live365.com/b92108_128mp3",
   "https://samcloud.spacial.com/api/listen?sid=111415&rid=194939&f=mp3,any&br=128000,any&m=sc",
   "https://0n-80s.radionetz.de/0n-80s.mp3"
 };
 
 int currCulNo = 0;
 char msg[50];
+
+TaskHandle_t TaskAudio;
+void TaskAudiocode(void *pvParameters) {
+  // Serial.print("Task1 running on core ");
+  // Serial.println(xPortGetCoreID());
+  audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+  audio.setVolume(21);  // 0...21
+  audio.connecttohost(stationlist[infolnc]);
+  for (;;) {
+    audio.loop();
+  }
+}
+
+TaskHandle_t TaskVU;
+void TaskVUcode(void *pvParameters) {
+  for (;;) {
+    //Serial.println("Jedu");
+    // if (VUon && !currCulNo)
+    if (VUon) {
+      /*  static unsigned long cas2 = millis();
+      static int led = 0;
+      if (millis() - cas2 > 100) {
+        if (!(led % 18))
+          pixels.clear();
+        int ledMod3 = led % 3;
+        pixels.setPixelColor(59 - (led / 3), pixels.Color((ledMod3 >= 1) ? ledBrightness : 0, ledBrightness, (ledMod3 == 2) ? ledBrightness : 0));
+        //pixels.setPixelColor(led/3, pixels.Color(ledBrightness,ledBrightness,ledBrightness));
+
+        pixels.show();
+        led++;
+        if (led > NUM_LEDS) led = 0;
+        cas2 = millis();
+        //Serial.println(59 - (led / 3));
+      }*/
+
+      // Reset bandValues[]
+      for (int i = 0; i < NUM_BANDS; i++) {
+        bandValues[i] = 0;
+      }
+
+      // Sample the audio pin
+      for (int i = 0; i < SAMPLES; i++) {
+        //newTime = micros();
+        //vReal[i] = analogRead(AUDIO_IN_PIN);  // A conversion takes about 9.7uS on an ESP32
+        vReal[i] = adc1_get_raw(ADC1_CHANNEL_0);
+        vImag[i] = 0;
+        // while ((micros() - newTime) < sampling_period_us) {
+        // }
+      }
+
+      // Compute FFT
+      FFT.DCRemoval();
+      FFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+      FFT.Compute(FFT_FORWARD);
+      FFT.ComplexToMagnitude();
+
+      // Analyse FFT results
+      for (int i = 2; i < (SAMPLES / 2); i++) {  // Don't use sample 0 and only first SAMPLES/2 are usable. Each array element represents a frequency bin and its value the amplitude.
+        if (vReal[i] > NOISE) {                  // Add a crude noise filter
+
+          //10 bands 40000/512= 39
+          if (i <= 2) bandValues[0] += (int)vReal[i];               //0-0
+          if (i > 2 && i <= 4) bandValues[1] += (int)vReal[i];      //1-1
+          if (i > 4 && i <= 7) bandValues[2] += (int)vReal[i];      //2-3
+          if (i > 7 && i <= 12) bandValues[3] += (int)vReal[i];     //4-7
+          if (i > 12 && i <= 21) bandValues[4] += (int)vReal[i];    //8-15
+          if (i > 21 && i <= 38) bandValues[5] += (int)vReal[i];    //16-31
+          if (i > 38 && i <= 72) bandValues[6] += (int)vReal[i];    //32-63
+          if (i > 72 && i <= 138) bandValues[7] += (int)vReal[i];   //64-127
+          if (i > 138 && i <= 240) bandValues[8] += (int)vReal[i];  //128-255
+          if (i > 240) bandValues[9] += (int)vReal[i];              //256-512
+        }
+      }
+
+      // Process the FFT data into bar heights
+      for (byte band = 0; band < NUM_BANDS; band++) {
+
+        // Scale the bars for the display
+        int barHeight = bandValues[band] / amplitude;
+        if (barHeight > TOP) barHeight = TOP;
+
+        // Small amount of averaging between frames
+        barHeight = ((oldBarHeights[band] * 1) + barHeight) / 2;
+
+        // Move peak up
+        if (barHeight > peak[band]) {
+          peak[band] = min(TOP, barHeight);
+        }
+
+        // Draw bars
+        for (int i = 0; i < TOP; i += 3) {
+          pixels.setPixelColor(59 - (((band * TOP) + i) / 3),
+                               pixels.Color(((barHeight > i + 1 && bar) || (peak[band] == i + 2 && top)) ? ledBrightness : 0,
+                                            ((barHeight > i && bar) || (peak[band] == i + 1 && top)) ? ledBrightness : 0,
+                                            ((barHeight > i + 2 && bar) || (peak[band] == i + 3 && top)) ? ledBrightness : 0));
+          /*    Serial.print(59 - (((band * TOP) + i) / 3));
+          Serial.print(" Bar height:");
+          Serial.print(barHeight);
+          Serial.print(" bar:");
+          Serial.print(bar);
+          Serial.print(" Brightness:");
+          Serial.print(ledBrightness);
+          Serial.print(" R:");*/
+        }
+        // Save oldBarHeights for averaging later
+        oldBarHeights[band] = barHeight;
+      }
+
+      pixels.show();
+      // Decay peak
+      unsigned long nowMillisTime = millis();
+      if (nowMillisTime - lastPeakTime > 120) {  //60
+        for (byte band = 0; band < NUM_BANDS; band++)
+          if (peak[band] > 0) peak[band] -= 1;
+      }
+      lastPeakTime = nowMillisTime;
+    }
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -126,7 +246,7 @@ void setup() {
     delay(5000);
     ESP.restart();
   }
-  ArduinoOTA
+  /*ArduinoOTA
     .onStart([]() {
       String type;
       if (ArduinoOTA.getCommand() == U_FLASH)
@@ -151,7 +271,7 @@ void setup() {
       else if (error == OTA_END_ERROR) Serial.println("End Failed");
     });
   ArduinoOTA.begin();
-
+*/
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
   Serial.println("WIFI Started");
@@ -159,7 +279,7 @@ void setup() {
   //start preferences instance
   pref.begin("radio", false);
   //set current amplitude
-  if (pref.isKey("amplitude")) amplitude = pref.getUShort("amplitude");
+  /*  if (pref.isKey("amplitude")) amplitude = pref.getUShort("amplitude");
   if (amplitude < 10) amplitude = 10;
   //set current ledBrightness
   if (pref.isKey("ledBrightness")) ledBrightness = pref.getUShort("ledBrightness");
@@ -169,11 +289,21 @@ void setup() {
   if (pref.isKey("station")) infolnc = pref.getUShort("station");
   if (infolnc >= STATIONS) infolnc = 0;
 
+*/
 
-  audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+  xTaskCreatePinnedToCore(
+    TaskAudiocode, /* Function to implement the task */
+    "TaskAudio",   /* Name of the task */
+    48000,         /* Stack size in words */
+    NULL,          /* Task input parameter */
+    9,             /* Priority of the task */
+    &TaskAudio,    /* Task handle. */
+    0);            /* Core where the task should run */
+
+  /* audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(21);  // 0...21
   audio.connecttohost(stationlist[infolnc]);
-
+*/
   sampling_period_us = round(1000000 * (1.0 / SAMPLING_FREQ));  //1.5??
 
   for (int i = 0; i < NUM_BUTTONS; i++)
@@ -182,10 +312,10 @@ void setup() {
   pinMode(BAR_PIN, INPUT_PULLUP);
   pinMode(RADIO_PIN, INPUT_PULLUP);
   pinMode(SONG_PIN, INPUT_PULLUP);
-  pinMode(STATION_PIN, INPUT_PULLUP);
-  pinMode(AUDIO_IN_PIN, INPUT);  // Signal in on this pin
-  //adc1_config_width(ADC_WIDTH_BIT_12);
-  //adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11);
+  //pinMode(STATION_PIN, INPUT_PULLUP);
+  //pinMode(AUDIO_IN_PIN, INPUT);  // Signal in on this pin
+  adc1_config_width(ADC_WIDTH_BIT_12);
+  adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
   pinMode(BAR_LED_PIN, OUTPUT);
   pinMode(TOP_LED_PIN, OUTPUT);
   pinMode(RADIO_PIN_LED, OUTPUT);
@@ -193,18 +323,29 @@ void setup() {
   pixels.begin();  // INITIALIZE NeoPixel strip object (REQUIRED)
   pixels.clear();
 
+  xTaskCreatePinnedToCore(
+    TaskVUcode, /* Function to implement the task */
+    "TaskVU",   /* Name of the task */
+    48000,      /* Stack size in words */
+    NULL,       /* Task input parameter */
+    15,         /* Priority of the task */
+    &TaskVU,    /* Task handle. */
+    1);
 
   //for testing
   radioOn = 0;
   VUon = 1;
+  top = 0;
 }
 
 
 void loop() {
-  ArduinoOTA.handle();
-  audio.loop();
+  //ArduinoOTA.handle();
+
+  //  audio.loop();
+
   //songRefresh();
-  buttonCheck();
+  //buttonCheck();
 
   /* static unsigned long cas3 = millis();
   if (millis() - cas3 > 30000) {
@@ -214,144 +355,6 @@ void loop() {
     //  pixels.show();
   }
   */
-  // if (VUon && !currCulNo)
-  if (VUon) {
-    static unsigned long cas2 = millis();
-    static int led = 0;
-    if (millis() - cas2 > 100) {
-      if (!(led % 18))
-        pixels.clear();
-      int ledMod3 = led % 3;
-      pixels.setPixelColor(59 - (led / 3), pixels.Color((ledMod3 >= 1) ? ledBrightness : 0, ledBrightness, (ledMod3 == 2) ? ledBrightness : 0));
-      //pixels.setPixelColor(led/3, pixels.Color(ledBrightness,ledBrightness,ledBrightness));
-
-      pixels.show();
-      led++;
-      if (led > NUM_LEDS) led = 0;
-      cas2 = millis();
-      //Serial.println(59 - (led / 3));
-    }
-
-    /*  static unsigned long cas4 = millis();
-  static int colorDef = 0;
-  if (millis() - cas4 > 1000) {
-    pixels.clear();
-    if (colorDef)
-      pixels.fill(pixels.Color(ledBrightness, ledBrightness, ledBrightness));
-    else
-      pixels.fill(pixels.Color(0, 0, 0));
-    pixels.show();
-    colorDef++;
-    if (colorDef > 1) colorDef = 0;
-    cas4 = millis();
-    Serial.println(colorDef);
-  }*/
-    /*
-  // Reset bandValues[]
-  for (int i = 0; i < NUM_BANDS; i++) {
-    bandValues[i] = 0;
-  }
-
-  // Sample the audio pin
-  for (int i = 0; i < SAMPLES; i++) {
-    newTime = micros();
-    vReal[i] = analogRead(AUDIO_IN_PIN);  // A conversion takes about 9.7uS on an ESP32
-    //vReal[i] = adc1_get_raw(ADC1_CHANNEL_7);
-    vImag[i] = 0;
-    while ((micros() - newTime) < sampling_period_us) {
-    }
-  }
-
-  // Compute FFT
-  FFT.DCRemoval();
-  FFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
-  FFT.Compute(FFT_FORWARD);
-  FFT.ComplexToMagnitude();
-
-  // Analyse FFT results
-  for (int i = 2; i < (SAMPLES / 2); i++) {  // Don't use sample 0 and only first SAMPLES/2 are usable. Each array element represents a frequency bin and its value the amplitude.
-    if (vReal[i] > NOISE) {                  // Add a crude noise filter
-
-      //8 bands, 12kHz top band
-      if (i <= 3) bandValues[0] += (int)vReal[i];
-      if (i > 3 && i <= 6) bandValues[1] += (int)vReal[i];
-      if (i > 6 && i <= 13) bandValues[2] += (int)vReal[i];
-      if (i > 13 && i <= 27) bandValues[3] += (int)vReal[i];
-      if (i > 27 && i <= 55) bandValues[4] += (int)vReal[i];
-      if (i > 55 && i <= 112) bandValues[5] += (int)vReal[i];
-      if (i > 112 && i <= 229) bandValues[6] += (int)vReal[i];
-      if (i > 229) bandValues[7] += (int)vReal[i];
-
-      //2,4,7,12,21,38,72,138,240
-
-            //10 bands
-      if (i <= 2) bandValues[0] += (int)vReal[i];
-      if (i > 2 && i <= 4) bandValues[1] += (int)vReal[i];
-      if (i > 4 && i <= 7) bandValues[2] += (int)vReal[i];
-      if (i > 7 && i <= 12) bandValues[3] += (int)vReal[i];
-      if (i > 12 && i <= 21) bandValues[4] += (int)vReal[i];
-      if (i > 21 && i <= 38) bandValues[5] += (int)vReal[i];
-      if (i > 38 && i <= 72) bandValues[6] += (int)vReal[i];
-      if (i > 72 && i <= 138) bandValues[6] += (int)vReal[i];
-      if (i > 138 && i <= 240) bandValues[6] += (int)vReal[i];
-      if (i > 240) bandValues[7] += (int)vReal[i];
-
-      //https://stackoverflow.com/questions/10160439/the-way-to-extract-10-band-equalization-information-from-mp3-format
-
-40000/512= 39
-1: 0-0
-2: 1-1
-3: 2-3
-4: 4-7
-5: 8-15
-6: 16-31
-7: 32-63
-8: 64-127
-9: 128-255
-10: 256-512
-    }
-  }
-
-  // Process the FFT data into bar heights
-  for (byte band = 0; band < NUM_BANDS; band++) {
-
-    // Scale the bars for the display
-    int barHeight = bandValues[band] / amplitude;
-    if (barHeight > TOP) barHeight = TOP;
-
-    // Small amount of averaging between frames
-    barHeight = ((oldBarHeights[band] * 1) + barHeight) / 2;
-
-    // Move peak up
-    if (barHeight > peak[band]) {
-      peak[band] = min(TOP, barHeight);
-    }
-
-
-    // Draw bars
-    for (int i = 0; i < TOP; i += 3) {
-      //if ((barHeight > i && bar) || (peak[band] == i + 1 && top))
-      pixels.setPixelColor(177-(((band * TOP) + i) / 3),
-                           pixels.Color(((barHeight > i && bar) || (peak[band] == i + 1 && top)) ? ledBrightness : 0,
-                                        ((barHeight > i + 1 && bar) || (peak[band] == i + 2 && top)) ? ledBrightness : 0,
-                                        ((barHeight > i + 2 && bar) || (peak[band] == i + 3 && top)) ? ledBrightness : 0));
-      //Serial.println(((band * TOP) + i) / 3);
-      //Serial.println(((barHeight > i && bar) || (peak[band] == i + 1 && top)) ? ledBrightness : 0);
-    }
-    // Save oldBarHeights for averaging later
-    oldBarHeights[band] = barHeight;
-  }
-
-  pixels.show();
-  // Decay peak
-  unsigned long nowMillisTime = millis();
-  if (nowMillisTime - lastPeakTime > 120) {  //60
-    for (byte band = 0; band < NUM_BANDS; band++)
-      if (peak[band] > 0) peak[band] -= 1;
-  }
-  lastPeakTime = nowMillisTime;
-  */
-  }
 }
 
 int lastButtonState[NUM_BUTTONS], buttonState[NUM_BUTTONS];
@@ -421,12 +424,6 @@ void buttonCheck() {
     else
       ;
   } 
-     if (stationName != digitalRead(STATION_PIN)) {
-    stationName = !stationName;
-    if (stationName)
-      ;
-    else
-      ;
   } 
 
   
@@ -437,8 +434,6 @@ void buttonCheck() {
     else
       digitalWrite(TOP_LED_PIN, LOW);
   }
-  //bar = digitalRead(BAR_PIN);
-  //Serial.print(bar);
 */
   if (bar != digitalRead(BAR_PIN)) {
     bar = !bar;
