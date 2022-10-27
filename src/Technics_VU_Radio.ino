@@ -87,8 +87,8 @@ unsigned long newTime, lastPeakTime = 0L;
 arduinoFFT FFT = arduinoFFT(vReal, vImag, SAMPLES, SAMPLING_FREQ);
 
 
-#define SSID "Hlava"
-#define PSK "hlavouni"
+#define SSID "****"
+#define PSK "****"
 
 #define STATIONS 15
 char *stationlist[STATIONS] = {
