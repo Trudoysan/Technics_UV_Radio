@@ -14,7 +14,7 @@
 //#include <SPI.h>
 
 
-//#define DEBUG
+#define DEBUG
 
 //BLE - ON/OFF (BLUE)
 //VU -  bar level  up, down, on/off by switch, Song name ON/OFF, Station Name ON/OFF
@@ -23,27 +23,27 @@
 //#define AUDIO_IN_PIN 36  // Signal in on this pin - ADC1_CHANNEL_0
 #define WS_PIN 13
 
-#define ST_UP_PIN 32     // In
-#define ST_DOWN_PIN 33   // In
+#define ST_UP_PIN 32     // In.  OK_OK_OK_OK
+#define ST_DOWN_PIN 33   // In  OK_OK_OK_OK
 #define LVL_UP_PIN 21    // In xx
-#define LVL_DOWN_PIN 39  // In xx 4 nebo 5
+#define LVL_DOWN_PIN 5   // In xx 4 nebo 5
 int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
 #define NUM_BUTTONS 4
 
-#define SONG_PIN 15  // In
+#define SONG_PIN 15  // In  OK_OK_OK_OK
 //define STATION_PIN 39  // In
 
-#define VU_PIN 17      // In -
-#define VU_LED_PIN 16  // Out -
+#define VU_PIN 14      // In -  OK_OK_OK_OK
+#define VU_LED_PIN 12  // Out -  OK_OK_OK_OK
 
-#define TOP_PIN 18      // In -
-#define TOP_LED_PIN 19  // Out -
+#define TOP_PIN 18      // In -  OK_OK_OK_OK
+#define TOP_LED_PIN 19  // Out -  OK_OK_OK_OK
 
-#define BAR_PIN 22      // In  -
-#define BAR_LED_PIN 23  // Out -
+#define BAR_PIN 22      // In  -  OK_OK_OK_OK
+#define BAR_LED_PIN 23  // Out -  OK_OK_OK_OK
 
-#define RADIO_PIN 14      // In
-#define RADIO_PIN_LED 12  // Out
+#define RADIO_PIN 16      // In
+#define RADIO_PIN_LED 17  // Out
 
 // Digital I/O used
 #define I2S_DOUT 26  // DIN connection
@@ -123,6 +123,7 @@ void TaskAudiocode(void *pvParameters) {
   audio.setVolume(21);  // 0...21
   audio.connecttohost(stationlist[infolnc]);
   for (;;) {
+    buttonCheck();
     audio.loop();
   }
 }
@@ -133,7 +134,7 @@ void TaskVUcode(void *pvParameters) {
     //Serial.println("Jedu");
     // if (VUon && !currCulNo)
     if (VUon) {
-      /*  static unsigned long cas2 = millis();
+      static unsigned long cas2 = millis();
       static int led = 0;
       if (millis() - cas2 > 100) {
         if (!(led % 18))
@@ -147,7 +148,7 @@ void TaskVUcode(void *pvParameters) {
         if (led > NUM_LEDS) led = 0;
         cas2 = millis();
         //Serial.println(59 - (led / 3));
-      }*/
+      }
 
       // Reset bandValues[]
       for (int i = 0; i < NUM_BANDS; i++) {
@@ -205,10 +206,10 @@ void TaskVUcode(void *pvParameters) {
 
         // Draw bars
         for (int i = 0; i < TOP; i += 3) {
-          pixels.setPixelColor(59 - (((band * TOP) + i) / 3),
-                               pixels.Color(((barHeight > i + 1 && bar) || (peak[band] == i + 2 && top)) ? ledBrightness : 0,
-                                            ((barHeight > i && bar) || (peak[band] == i + 1 && top)) ? ledBrightness : 0,
-                                            ((barHeight > i + 2 && bar) || (peak[band] == i + 3 && top)) ? ledBrightness : 0));
+          // pixels.setPixelColor(59 - (((band * TOP) + i) / 3),
+          //                      pixels.Color(((barHeight > i + 1 && bar) || (peak[band] == i + 2 && top)) ? ledBrightness : 0,
+          //                                   ((barHeight > i && bar) || (peak[band] == i + 1 && top)) ? ledBrightness : 0,
+          //                                   ((barHeight > i + 2 && bar) || (peak[band] == i + 3 && top)) ? ledBrightness : 0));
           /*    Serial.print(59 - (((band * TOP) + i) / 3));
           Serial.print(" Bar height:");
           Serial.print(barHeight);
@@ -230,6 +231,8 @@ void TaskVUcode(void *pvParameters) {
           if (peak[band] > 0) peak[band] -= 1;
       }
       lastPeakTime = nowMillisTime;
+    } else {
+      vTaskDelay(100 / portTICK_PERIOD_MS);
     }
   }
 }
@@ -284,21 +287,21 @@ void setup() {
   //set current ledBrightness
   if (pref.isKey("ledBrightness")) ledBrightness = pref.getUShort("ledBrightness");
   if (ledBrightness > 255) ledBrightness = 255;
-  if (ledBrightness < 10) ledBrightness = 10;
+  if (ledBrightness < 10) ledBrightness = 10;*/
   //set current station to saved value if available
   if (pref.isKey("station")) infolnc = pref.getUShort("station");
   if (infolnc >= STATIONS) infolnc = 0;
 
-*/
+
 
   xTaskCreatePinnedToCore(
     TaskAudiocode, /* Function to implement the task */
     "TaskAudio",   /* Name of the task */
-    48000,         /* Stack size in words */
+    8192,          /* Stack size in words */
     NULL,          /* Task input parameter */
     9,             /* Priority of the task */
     &TaskAudio,    /* Task handle. */
-    0);            /* Core where the task should run */
+    1);            /* Core where the task should run */
 
   /* audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(21);  // 0...21
@@ -326,15 +329,15 @@ void setup() {
   xTaskCreatePinnedToCore(
     TaskVUcode, /* Function to implement the task */
     "TaskVU",   /* Name of the task */
-    48000,      /* Stack size in words */
+    8192,       /* Stack size in words */
     NULL,       /* Task input parameter */
-    15,         /* Priority of the task */
+    9,          /* Priority of the task */
     &TaskVU,    /* Task handle. */
-    1);
+    0);
 
   //for testing
   radioOn = 0;
-  VUon = 1;
+  //VUon = 1;
   top = 0;
 }
 
@@ -345,6 +348,7 @@ void loop() {
   //  audio.loop();
 
   //songRefresh();
+  //Serial.println(".");
   //buttonCheck();
 
   /* static unsigned long cas3 = millis();
@@ -362,9 +366,11 @@ unsigned long lastPlayDebounceTime[NUM_BUTTONS];
 unsigned long debouncePlayDelay = 100;
 
 void buttonCheck() {
-
+  static unsigned long lastMillis;
   unsigned long currentMillis = millis();
-
+  if (currentMillis - lastMillis < 20)
+    return;
+  lastMillis = currentMillis;
   for (int i = 0; i < NUM_BUTTONS; i++) {
     int buttonRead = digitalRead(buttonPins[i]);
     if (buttonRead != lastButtonState[i]) {
@@ -416,25 +422,24 @@ void buttonCheck() {
       audio.connecttohost(stationlist[infolnc]);
     else
       audio.stopSong();
-  }
-   if (songName != digitalRead(SONG_PIN)) {
-    songName = !songName;
-    if (songName)
-      ;
-    else
-      ;
-  } 
-  } 
+  }*/
+  songName = digitalRead(SONG_PIN);
 
-  
+
+
+
   if (top != digitalRead(TOP_PIN)) {
     top = !top;
     if (top)
-      digitalWrite(TOP_LED_PIN, HIGH);
-    else
       digitalWrite(TOP_LED_PIN, LOW);
+    else
+      digitalWrite(TOP_LED_PIN, HIGH);
+#ifdef DEBUG
+    Serial.print("Top de-activated: ");
+    Serial.println(top);
+#endif
   }
-*/
+
   if (bar != digitalRead(BAR_PIN)) {
     bar = !bar;
     if (bar)
@@ -446,11 +451,20 @@ void buttonCheck() {
     Serial.println(bar);
 #endif
   }
-  /*
+
   if (VUon != digitalRead(VU_PIN)) {
     VUon = !VUon;
-    if (!VUon) pixels.clear();
-  }*/
+    if (VUon)
+      digitalWrite(VU_LED_PIN, LOW);
+    else {
+      digitalWrite(VU_LED_PIN, HIGH);
+      pixels.clear();
+    }
+#ifdef DEBUG
+    Serial.print("VUon de-activated: ");
+    Serial.println(VUon);
+#endif
+  }
 }
 /*
 void ledLightSetting(int pinNumber) {
@@ -594,12 +608,14 @@ void audio_showstreaminfo(const char *info) {
 void audio_showstreamtitle(const char *info) {
   Serial.print("streamtitle ");
   Serial.println(info);
-  int msgLength = max(strlen(info), sizeof(msg) - 1);
-  strncpy(msg, info, msgLength);
-  msg[msgLength] = '\0';
-  currCulNo = msgLength * 10;
-  Serial.print("msg ");
-  Serial.println(msg);
+  if (songName) {
+    int msgLength = max(strlen(info), sizeof(msg) - 1);
+    strncpy(msg, info, msgLength);
+    msg[msgLength] = '\0';
+    currCulNo = msgLength * 10;
+    Serial.print("msg ");
+    Serial.println(msg);
+  }
 }
 void audio_bitrate(const char *info) {
   Serial.print("bitrate     ");
