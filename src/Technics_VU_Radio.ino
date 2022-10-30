@@ -6,13 +6,23 @@
 #include "Audio.h"
 //#include "FS.h"
 #include <Preferences.h>
-#include <Adafruit_NeoPixel.h>
 //#include <ESPmDNS.h>
 //#include <WiFiUdp.h>
 //#include <ArduinoOTA.h>
 #include <arduinoFFT.h>
 //#include <SPI.h>
 
+
+//#define ADAFRUIT
+
+#ifdef ADAFRUIT
+#include <Adafruit_NeoPixel.h>
+#else
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp32-hal.h"
+#endif
 
 //#define DEBUG
 
@@ -74,7 +84,13 @@ const uint8_t kMatrixHeight = 18;                // Matrix height
 
 #define TOP (kMatrixHeight - 0)  // Don't allow the bars to go offscreen
 
+#ifdef ADAFRUIT
 Adafruit_NeoPixel pixels(NUM_LEDS / 3, WS_PIN, NEO_GRB + NEO_KHZ800);
+#else
+#define NR_OF_ALL_BITS 24 * (NUM_LEDS / 3)
+rmt_data_t led_data[NR_OF_ALL_BITS];
+rmt_obj_t *rmt_send = NULL;
+#endif
 
 // Sampling and FFT stuff
 unsigned int sampling_period_us;
@@ -207,24 +223,49 @@ void TaskVUcode(void *pvParameters) {
         }
 
         // Draw bars
+#ifdef ADAFRUIT
         for (int i = 0; i < TOP; i += 3) {
           pixels.setPixelColor(59 - (((band * TOP) + i) / 3),
                                pixels.Color(((barHeight > i + 1 && !bar) || (peak[band] == i + 2 && !top)) ? ledBrightness : 0,
                                             ((barHeight > i && !bar) || (peak[band] == i + 1 && !top)) ? ledBrightness : 0,
                                             ((barHeight > i + 2 && !bar) || (peak[band] == i + 3 && !top)) ? ledBrightness : 0));
-          /*    Serial.print(59 - (((band * TOP) + i) / 3));
-          Serial.print(" Bar height:");
-          Serial.print(barHeight);
-          Serial.print(" bar:");
-          Serial.print(bar);
-          Serial.print(" Brightness:");
-          Serial.print(ledBrightness);
-          Serial.print(" R:");*/
         }
+#else
+        for (int i = 0; i < TOP; i++) {
+          int bit;
+          int j = (179 - (band * TOP) + i) * 8;
+          if (((barHeight > i && !bar) || (peak[band] == i + 1 && !top))) {
+            for (bit = 0; bit < 5; bit++) {
+              led_data[j + bit].level0 = 1;
+              led_data[j + bit].duration0 = 8;
+              led_data[j + bit].level1 = 0;
+              led_data[j + bit].duration1 = 4;
+            }
+            for (; bit < 8; bit++) {
+              led_data[j + bit].level0 = 1;
+              led_data[j + bit].duration0 = 4;
+              led_data[j + bit].level1 = 0;
+              led_data[j + bit].duration1 = 8;
+            }
+          } else {
+            for (bit = 0; bit < 8; bit++) {
+              led_data[j + bit].level0 = 1;
+              led_data[j + bit].duration0 = 4;
+              led_data[j + bit].level1 = 0;
+              led_data[j + bit].duration1 = 8;
+            }
+          }
+        }
+#endif
         // Save oldBarHeights for averaging later
         oldBarHeights[band] = barHeight;
       }
+#ifdef ADAFRUIT
       pixels.show();
+#else
+      // Send the data
+      rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
+#endif
       // Decay peak
       unsigned long nowMillisTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
 #ifdef DEBUG
@@ -233,15 +274,25 @@ void TaskVUcode(void *pvParameters) {
       Serial.print(". lastPeakTime: ");
       Serial.println(lastPeakTime);
 #endif
-      if (nowMillisTime - lastPeakTime > 120) {  //60
+      if (nowMillisTime - lastPeakTime > 180) {  //60
         for (byte band = 0; band < NUM_BANDS; band++)
           if (peak[band] > 0) peak[band] -= 1;
         lastPeakTime = nowMillisTime;
       }
 
     } else {
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+#ifdef ADAFRUIT
       pixels.clear();
+#else
+      for (int j = 0; j < 179 * 8; j++) {
+        led_data[j].level0 = 1;
+        led_data[j].duration0 = 4;
+        led_data[j].level1 = 0;
+        led_data[j].duration1 = 8;
+      }
+      rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
+#endif
+      vTaskDelay(100 / portTICK_PERIOD_MS);
     }
   }
 }
@@ -291,12 +342,8 @@ void setup() {
   //start preferences instance
   pref.begin("radio", false);
   //set current amplitude
-  /*  if (pref.isKey("amplitude")) amplitude = pref.getUShort("amplitude");
+  if (pref.isKey("amplitude")) amplitude = pref.getUShort("amplitude");
   if (amplitude < 10) amplitude = 10;
-  //set current ledBrightness
-  if (pref.isKey("ledBrightness")) ledBrightness = pref.getUShort("ledBrightness");
-  if (ledBrightness > 255) ledBrightness = 255;
-  if (ledBrightness < 10) ledBrightness = 10;*/
   //set current station to saved value if available
   if (pref.isKey("station")) infolnc = pref.getUShort("station");
   if (infolnc >= STATIONS) infolnc = 0;
@@ -322,9 +369,17 @@ void setup() {
   pinMode(RADIO_LED_PIN, OUTPUT);
   pinMode(VU_LED_PIN, OUTPUT);
 
+#ifdef ADAFRUIT
   pixels.begin();  // INITIALIZE NeoPixel strip object (REQUIRED)
   pixels.clear();
   pixels.show();
+#else
+  if ((rmt_send = rmtInit(WS_PIN, RMT_TX_MODE, RMT_MEM_64)) == NULL) {
+    Serial.println("init sender failed\n");
+  }
+  float realTick = rmtSetTick(rmt_send, 100);
+  //Serial.printf("real tick set to: %fns\n", realTick);
+#endif
 
   radioOn = -1;  // to light up LEDs
   VUon = -1;
@@ -570,12 +625,12 @@ void drawLineT(int bar, char pismeno, int sloupec) {
   int alphabetIndex = msg[pismeno] - '@';
   if (alphabetIndex < 0) alphabetIndex = 0;
 
-  for (int i = 0; i < 18 / 3; i += 3) {  //draw one band/bar  (INPUT >> N) & 1;
-    pixels.setPixelColor(bar * 18 + i, pixels.Color(
-                                         ((alphabets[alphabetIndex][i] >> (7 - sloupec)) & 1) ? ledBrightness : 0,
-                                         ((alphabets[alphabetIndex][i + 1] >> (7 - sloupec)) & 1) ? ledBrightness : 0,
-                                         ((alphabets[alphabetIndex][i + 2] >> (7 - sloupec)) & 1) ? ledBrightness : 0));
-  }
+  //for (int i = 0; i < 18 / 3; i += 3) {  //draw one band/bar  (INPUT >> N) & 1;
+  //  pixels.setPixelColor(bar * 18 + i, pixels.Color(
+  //                                       ((alphabets[alphabetIndex][i] >> (7 - sloupec)) & 1) ? ledBrightness : 0,
+  //                                       ((alphabets[alphabetIndex][i + 1] >> (7 - sloupec)) & 1) ? ledBrightness : 0,
+  //                                       ((alphabets[alphabetIndex][i + 2] >> (7 - sloupec)) & 1) ? ledBrightness : 0));
+  // }
 }
 
 void songRefresh(void) {
@@ -583,7 +638,7 @@ void songRefresh(void) {
   static unsigned long songTime = millis();
   if (currCulNo) {
     if (millis() - songTime > 50) {
-      pixels.clear();
+      // pixels.clear();
       if (currCulNo > currCulNoAct) {
         for (int i = 0; i < NUM_BANDS; i++) {
           drawLineT(i, msg[(currCulNoAct - NUM_BANDS + 1 + i) / 10], (currCulNoAct - NUM_BANDS + 1 + i) % 10);
@@ -593,7 +648,7 @@ void songRefresh(void) {
         //test, zda oz odrolovano
         //pokud ne, odroluj
       }
-      pixels.show();
+      //pixels.show();
       currCulNoAct++;
       songTime = millis();
     }
