@@ -14,7 +14,7 @@
 //#include <SPI.h>
 
 
-#define DEBUG
+//#define DEBUG
 
 //BLE - ON/OFF (BLUE)
 //VU -  bar level  up, down, on/off by switch, Song name ON/OFF, Station Name ON/OFF
@@ -23,10 +23,10 @@
 //#define AUDIO_IN_PIN 36  // Signal in on this pin - ADC1_CHANNEL_0
 #define WS_PIN 13
 
-#define ST_UP_PIN 32     // In.  OK_OK_OK_OK
-#define ST_DOWN_PIN 33   // In  OK_OK_OK_OK
-#define LVL_UP_PIN 21    // In xx
-#define LVL_DOWN_PIN 5   // In xx 4 nebo 5
+#define ST_UP_PIN 32    // In.  OK_OK_OK_OK
+#define ST_DOWN_PIN 33  // In  OK_OK_OK_OK
+#define LVL_UP_PIN 21   // In xx
+#define LVL_DOWN_PIN 5  // In xx 4 nebo 5
 int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
 #define NUM_BUTTONS 4
 
@@ -43,7 +43,7 @@ int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
 #define BAR_LED_PIN 23  // Out -  OK_OK_OK_OK
 
 #define RADIO_PIN 16      // In
-#define RADIO_PIN_LED 17  // Out
+#define RADIO_LED_PIN 17  // Out
 
 // Digital I/O used
 #define I2S_DOUT 26  // DIN connection
@@ -61,7 +61,7 @@ Preferences pref;
 int infolnc = 0;         //stores channel number for tuner
 int ledBrightness = 32;  //store led Brightness, maybe different for different colours?
 
-bool bar = 1, top = 1, radioOn, VUon, songName;
+volatile bool bar = 1, top = 1, radioOn, VUon, songName;
 
 #define NUM_BANDS 10  // To change this, you will need to change the bunch of if statements describing the mapping from bins to bands
 #define NOISE 500     // Used as a crude noise filter, values below this are ignored
@@ -83,12 +83,12 @@ int oldBarHeights[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 int bandValues[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 double vReal[SAMPLES];
 double vImag[SAMPLES];
-unsigned long newTime, lastPeakTime = 0L;
+unsigned long newTime;
 arduinoFFT FFT = arduinoFFT(vReal, vImag, SAMPLES, SAMPLING_FREQ);
 
 
-#define SSID "****"
-#define PSK "****"
+#define SSID "Hlava"
+#define PSK "hlavouni"
 
 #define STATIONS 15
 char *stationlist[STATIONS] = {
@@ -121,7 +121,8 @@ void TaskAudiocode(void *pvParameters) {
   // Serial.println(xPortGetCoreID());
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(21);  // 0...21
-  audio.connecttohost(stationlist[infolnc]);
+  if (!radioOn)
+    audio.connecttohost(stationlist[infolnc]);
   for (;;) {
     buttonCheck();
     audio.loop();
@@ -130,25 +131,26 @@ void TaskAudiocode(void *pvParameters) {
 
 TaskHandle_t TaskVU;
 void TaskVUcode(void *pvParameters) {
+  static unsigned long lastPeakTime;
   for (;;) {
     //Serial.println("Jedu");
     // if (VUon && !currCulNo)
-    if (VUon) {
-      static unsigned long cas2 = millis();
+    if (!VUon) {
+      /*static unsigned long cas2 = millis();
       static int led = 0;
-      if (millis() - cas2 > 100) {
+       if (millis() - cas2 > 100) {
         if (!(led % 18))
           pixels.clear();
         int ledMod3 = led % 3;
-        pixels.setPixelColor(59 - (led / 3), pixels.Color((ledMod3 >= 1) ? ledBrightness : 0, ledBrightness, (ledMod3 == 2) ? ledBrightness : 0));
+        //pixels.setPixelColor(59 - (led / 3), pixels.Color((ledMod3 >= 1) ? ledBrightness : 0, ledBrightness, (ledMod3 == 2) ? ledBrightness : 0));
         //pixels.setPixelColor(led/3, pixels.Color(ledBrightness,ledBrightness,ledBrightness));
 
-        pixels.show();
+        //pixels.show();
         led++;
         if (led > NUM_LEDS) led = 0;
         cas2 = millis();
         //Serial.println(59 - (led / 3));
-      }
+      }*/
 
       // Reset bandValues[]
       for (int i = 0; i < NUM_BANDS; i++) {
@@ -206,10 +208,10 @@ void TaskVUcode(void *pvParameters) {
 
         // Draw bars
         for (int i = 0; i < TOP; i += 3) {
-          // pixels.setPixelColor(59 - (((band * TOP) + i) / 3),
-          //                      pixels.Color(((barHeight > i + 1 && bar) || (peak[band] == i + 2 && top)) ? ledBrightness : 0,
-          //                                   ((barHeight > i && bar) || (peak[band] == i + 1 && top)) ? ledBrightness : 0,
-          //                                   ((barHeight > i + 2 && bar) || (peak[band] == i + 3 && top)) ? ledBrightness : 0));
+          pixels.setPixelColor(59 - (((band * TOP) + i) / 3),
+                               pixels.Color(((barHeight > i + 1 && !bar) || (peak[band] == i + 2 && !top)) ? ledBrightness : 0,
+                                            ((barHeight > i && !bar) || (peak[band] == i + 1 && !top)) ? ledBrightness : 0,
+                                            ((barHeight > i + 2 && !bar) || (peak[band] == i + 3 && !top)) ? ledBrightness : 0));
           /*    Serial.print(59 - (((band * TOP) + i) / 3));
           Serial.print(" Bar height:");
           Serial.print(barHeight);
@@ -222,17 +224,24 @@ void TaskVUcode(void *pvParameters) {
         // Save oldBarHeights for averaging later
         oldBarHeights[band] = barHeight;
       }
-
       pixels.show();
       // Decay peak
-      unsigned long nowMillisTime = millis();
+      unsigned long nowMillisTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
+#ifdef DEBUG
+      Serial.print("nowMillisTime: ");
+      Serial.print(nowMillisTime);
+      Serial.print(". lastPeakTime: ");
+      Serial.println(lastPeakTime);
+#endif
       if (nowMillisTime - lastPeakTime > 120) {  //60
         for (byte band = 0; band < NUM_BANDS; band++)
           if (peak[band] > 0) peak[band] -= 1;
+        lastPeakTime = nowMillisTime;
       }
-      lastPeakTime = nowMillisTime;
+
     } else {
       vTaskDelay(100 / portTICK_PERIOD_MS);
+      pixels.clear();
     }
   }
 }
@@ -292,17 +301,6 @@ void setup() {
   if (pref.isKey("station")) infolnc = pref.getUShort("station");
   if (infolnc >= STATIONS) infolnc = 0;
 
-
-
-  xTaskCreatePinnedToCore(
-    TaskAudiocode, /* Function to implement the task */
-    "TaskAudio",   /* Name of the task */
-    8192,          /* Stack size in words */
-    NULL,          /* Task input parameter */
-    9,             /* Priority of the task */
-    &TaskAudio,    /* Task handle. */
-    1);            /* Core where the task should run */
-
   /* audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(21);  // 0...21
   audio.connecttohost(stationlist[infolnc]);
@@ -321,10 +319,27 @@ void setup() {
   adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
   pinMode(BAR_LED_PIN, OUTPUT);
   pinMode(TOP_LED_PIN, OUTPUT);
-  pinMode(RADIO_PIN_LED, OUTPUT);
+  pinMode(RADIO_LED_PIN, OUTPUT);
+  pinMode(VU_LED_PIN, OUTPUT);
 
   pixels.begin();  // INITIALIZE NeoPixel strip object (REQUIRED)
   pixels.clear();
+  pixels.show();
+
+  radioOn = -1;  // to light up LEDs
+  VUon = -1;
+  top = -1;
+  bar = -1;
+  buttonCheck();
+
+  xTaskCreatePinnedToCore(
+    TaskAudiocode, /* Function to implement the task */
+    "TaskAudio",   /* Name of the task */
+    8192,          /* Stack size in words */
+    NULL,          /* Task input parameter */
+    9,             /* Priority of the task */
+    &TaskAudio,    /* Task handle. */
+    1);            /* Core where the task should run */
 
   xTaskCreatePinnedToCore(
     TaskVUcode, /* Function to implement the task */
@@ -334,11 +349,6 @@ void setup() {
     9,          /* Priority of the task */
     &TaskVU,    /* Task handle. */
     0);
-
-  //for testing
-  radioOn = 0;
-  //VUon = 1;
-  top = 0;
 }
 
 
@@ -415,21 +425,28 @@ void buttonCheck() {
     }
     lastButtonState[i] = buttonRead;
   }
-  /*
+
   if (radioOn != digitalRead(RADIO_PIN)) {
-    radioOn = !radioOn;
-    if (radioOn)
+    if (radioOn != -1)
+      radioOn = !radioOn;
+    if (!radioOn) {
+      digitalWrite(RADIO_LED_PIN, HIGH);
       audio.connecttohost(stationlist[infolnc]);
-    else
+    } else {
+      digitalWrite(RADIO_LED_PIN, LOW);
       audio.stopSong();
-  }*/
+    }
+#ifdef DEBUG
+    Serial.print("radioOn de-activated: ");
+    Serial.println(radioOn);
+#endif
+  }
+
   songName = digitalRead(SONG_PIN);
 
-
-
-
   if (top != digitalRead(TOP_PIN)) {
-    top = !top;
+    if (top != -1)
+      top = !top;
     if (top)
       digitalWrite(TOP_LED_PIN, LOW);
     else
@@ -441,7 +458,8 @@ void buttonCheck() {
   }
 
   if (bar != digitalRead(BAR_PIN)) {
-    bar = !bar;
+    if (bar != -1)
+      bar = !bar;
     if (bar)
       digitalWrite(BAR_LED_PIN, LOW);
     else
@@ -451,15 +469,13 @@ void buttonCheck() {
     Serial.println(bar);
 #endif
   }
-
   if (VUon != digitalRead(VU_PIN)) {
-    VUon = !VUon;
+    if (VUon != -1)
+      VUon = !VUon;
     if (VUon)
       digitalWrite(VU_LED_PIN, LOW);
-    else {
+    else
       digitalWrite(VU_LED_PIN, HIGH);
-      pixels.clear();
-    }
 #ifdef DEBUG
     Serial.print("VUon de-activated: ");
     Serial.println(VUon);
