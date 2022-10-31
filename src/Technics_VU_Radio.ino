@@ -87,6 +87,7 @@ const uint8_t kMatrixHeight = 18;                // Matrix height
 #ifdef ADAFRUIT
 Adafruit_NeoPixel pixels(NUM_LEDS / 3, WS_PIN, NEO_GRB + NEO_KHZ800);
 #else
+
 #define NR_OF_ALL_BITS 24 * (NUM_LEDS / 3)
 rmt_data_t led_data[NR_OF_ALL_BITS];
 rmt_obj_t *rmt_send = NULL;
@@ -103,8 +104,8 @@ unsigned long newTime;
 arduinoFFT FFT = arduinoFFT(vReal, vImag, SAMPLES, SAMPLING_FREQ);
 
 
-#define SSID "Hlava"
-#define PSK "hlavouni"
+#define SSID "*****"
+#define PSK "*****"
 
 #define STATIONS 15
 char *stationlist[STATIONS] = {
@@ -137,6 +138,7 @@ void TaskAudiocode(void *pvParameters) {
   // Serial.println(xPortGetCoreID());
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(21);  // 0...21
+
   if (!radioOn)
     audio.connecttohost(stationlist[infolnc]);
   for (;;) {
@@ -145,42 +147,64 @@ void TaskAudiocode(void *pvParameters) {
   }
 }
 
+int color[] = { 0x55, 0x11, 0x77 };  // RGB value
+int led_index = 0;
+
 TaskHandle_t TaskVU;
 void TaskVUcode(void *pvParameters) {
   static unsigned long lastPeakTime;
   for (;;) {
     //Serial.println("Jedu");
+    // Init data with only one led ON
+    /* int led, col, bit;
+    int i=0;
+    for (led=0; led<NR_OF_LEDS; led++) {
+        for (col=0; col<3; col++ ) {
+            for (bit=0; bit<8; bit++){
+                if ( (color[col] & (1<<(7-bit))) && (led == led_index) ) {
+                    led_data[i].level0 = 1;
+                    led_data[i].duration0 = 8;
+                    led_data[i].level1 = 0;
+                    led_data[i].duration1 = 4;
+                } else {
+                    led_data[i].level0 = 1;
+                    led_data[i].duration0 = 4;
+                    led_data[i].level1 = 0;
+                    led_data[i].duration1 = 8;
+                }
+                i++;
+            }
+        }
+    }
+    // make the led travel in the pannel
+    if ((++led_index)>=NR_OF_LEDS) {
+        led_index = 0;
+    }
+
+    // Send the data
+    rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    //delay(100);
+*/
+
+    //Serial.println("Jedu");
     // if (VUon && !currCulNo)
     if (!VUon) {
-      /*static unsigned long cas2 = millis();
-      static int led = 0;
-       if (millis() - cas2 > 100) {
-        if (!(led % 18))
-          pixels.clear();
-        int ledMod3 = led % 3;
-        //pixels.setPixelColor(59 - (led / 3), pixels.Color((ledMod3 >= 1) ? ledBrightness : 0, ledBrightness, (ledMod3 == 2) ? ledBrightness : 0));
-        //pixels.setPixelColor(led/3, pixels.Color(ledBrightness,ledBrightness,ledBrightness));
-
-        //pixels.show();
-        led++;
-        if (led > NUM_LEDS) led = 0;
-        cas2 = millis();
-        //Serial.println(59 - (led / 3));
-      }*/
 
       // Reset bandValues[]
       for (int i = 0; i < NUM_BANDS; i++) {
         bandValues[i] = 0;
       }
-
+      //unsigned long newTime;
       // Sample the audio pin
       for (int i = 0; i < SAMPLES; i++) {
         //newTime = micros();
+        // newTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
         //vReal[i] = analogRead(AUDIO_IN_PIN);  // A conversion takes about 9.7uS on an ESP32
         vReal[i] = adc1_get_raw(ADC1_CHANNEL_0);
         vImag[i] = 0;
-        // while ((micros() - newTime) < sampling_period_us) {
-        // }
+        // while ((xTaskGetTickCount() * portTICK_PERIOD_MS - newTime) < sampling_period_us) {
+        //}
       }
 
       // Compute FFT
@@ -233,19 +257,20 @@ void TaskVUcode(void *pvParameters) {
 #else
         for (int i = 0; i < TOP; i++) {
           int bit;
-          int j = (179 - (band * TOP) + i) * 8;
+          int j = (179 - ((band * TOP) + i)) * 8;
+          //Serial.println(j);
           if (((barHeight > i && !bar) || (peak[band] == i + 1 && !top))) {
             for (bit = 0; bit < 5; bit++) {
-              led_data[j + bit].level0 = 1;
-              led_data[j + bit].duration0 = 8;
-              led_data[j + bit].level1 = 0;
-              led_data[j + bit].duration1 = 4;
-            }
-            for (; bit < 8; bit++) {
               led_data[j + bit].level0 = 1;
               led_data[j + bit].duration0 = 4;
               led_data[j + bit].level1 = 0;
               led_data[j + bit].duration1 = 8;
+            }
+            for (; bit < 8; bit++) {
+              led_data[j + bit].level0 = 1;
+              led_data[j + bit].duration0 = 8;
+              led_data[j + bit].level1 = 0;
+              led_data[j + bit].duration1 = 4;
             }
           } else {
             for (bit = 0; bit < 8; bit++) {
@@ -279,18 +304,18 @@ void TaskVUcode(void *pvParameters) {
           if (peak[band] > 0) peak[band] -= 1;
         lastPeakTime = nowMillisTime;
       }
-
+      vTaskDelay(10 / portTICK_PERIOD_MS);
     } else {
 #ifdef ADAFRUIT
       pixels.clear();
 #else
-      for (int j = 0; j < 179 * 8; j++) {
+      /*   for (int j = 0; j < 179 * 8; j++) {
         led_data[j].level0 = 1;
         led_data[j].duration0 = 4;
         led_data[j].level1 = 0;
         led_data[j].duration1 = 8;
       }
-      rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
+      rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);*/
 #endif
       vTaskDelay(100 / portTICK_PERIOD_MS);
     }
@@ -374,11 +399,12 @@ void setup() {
   pixels.clear();
   pixels.show();
 #else
+  Serial.println("rmtInit");
   if ((rmt_send = rmtInit(WS_PIN, RMT_TX_MODE, RMT_MEM_64)) == NULL) {
     Serial.println("init sender failed\n");
   }
   float realTick = rmtSetTick(rmt_send, 100);
-  //Serial.printf("real tick set to: %fns\n", realTick);
+  Serial.printf("real tick set to: %fns\n", realTick);
 #endif
 
   radioOn = -1;  // to light up LEDs
@@ -388,20 +414,20 @@ void setup() {
   buttonCheck();
 
   xTaskCreatePinnedToCore(
-    TaskAudiocode, /* Function to implement the task */
-    "TaskAudio",   /* Name of the task */
-    8192,          /* Stack size in words */
-    NULL,          /* Task input parameter */
-    9,             /* Priority of the task */
-    &TaskAudio,    /* Task handle. */
-    1);            /* Core where the task should run */
+    TaskAudiocode,
+    "TaskAudio",
+    2 * 8192,
+    NULL,
+    8,
+    &TaskAudio,
+    1);
 
   xTaskCreatePinnedToCore(
     TaskVUcode, /* Function to implement the task */
     "TaskVU",   /* Name of the task */
-    8192,       /* Stack size in words */
+    4 * 8192,   /* Stack size in words */
     NULL,       /* Task input parameter */
-    9,          /* Priority of the task */
+    8,          /* Priority of the task */
     &TaskVU,    /* Task handle. */
     0);
 }
