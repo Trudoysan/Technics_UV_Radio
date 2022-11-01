@@ -11,6 +11,8 @@
 //#include <ArduinoOTA.h>
 #include <arduinoFFT.h>
 //#include <SPI.h>
+#include "soc/timer_group_struct.h"
+#include "soc/timer_group_reg.h"
 
 
 //#define ADAFRUIT
@@ -33,10 +35,10 @@
 //#define AUDIO_IN_PIN 36  // Signal in on this pin - ADC1_CHANNEL_0
 #define WS_PIN 13
 
-#define ST_UP_PIN 32    // In.  OK_OK_OK_OK
-#define ST_DOWN_PIN 33  // In  OK_OK_OK_OK
-#define LVL_UP_PIN 21   // In xx
-#define LVL_DOWN_PIN 5  // In xx 4 nebo 5
+#define ST_UP_PIN 32     // In.  OK_OK_OK_OK
+#define ST_DOWN_PIN 33   // In  OK_OK_OK_OK
+#define LVL_UP_PIN 5     // In xx
+#define LVL_DOWN_PIN 21  // In xx 4 nebo 5
 int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
 #define NUM_BUTTONS 4
 
@@ -71,7 +73,7 @@ Preferences pref;
 int infolnc = 0;         //stores channel number for tuner
 int ledBrightness = 32;  //store led Brightness, maybe different for different colours?
 
-volatile bool bar = 1, top = 1, radioOn, VUon, songName;
+bool bar = 1, top = 1, radioOn, VUon, songName;
 
 #define NUM_BANDS 10  // To change this, you will need to change the bunch of if statements describing the mapping from bins to bands
 #define NOISE 500     // Used as a crude noise filter, values below this are ignored
@@ -104,8 +106,8 @@ unsigned long newTime;
 arduinoFFT FFT = arduinoFFT(vReal, vImag, SAMPLES, SAMPLING_FREQ);
 
 
-#define SSID "*****"
-#define PSK "*****"
+#define SSID "****"
+#define PSK "****"
 
 #define STATIONS 15
 char *stationlist[STATIONS] = {
@@ -138,59 +140,58 @@ void TaskAudiocode(void *pvParameters) {
   // Serial.println(xPortGetCoreID());
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(21);  // 0...21
-
   if (!radioOn)
     audio.connecttohost(stationlist[infolnc]);
+
   for (;;) {
     buttonCheck();
     audio.loop();
   }
 }
 
-int color[] = { 0x55, 0x11, 0x77 };  // RGB value
-int led_index = 0;
+void feedTheDog() {
+  // feed dog 0
+  TIMERG0.wdt_wprotect = TIMG_WDT_WKEY_VALUE;  // write enable
+  TIMERG0.wdt_feed = 1;                        // feed dog
+  TIMERG0.wdt_wprotect = 0;                    // write protect
+  // feed dog 1
+  TIMERG1.wdt_wprotect = TIMG_WDT_WKEY_VALUE;  // write enable
+  TIMERG1.wdt_feed = 1;                        // feed dog
+  TIMERG1.wdt_wprotect = 0;                    // write protect
+}
+
+int swapLED(int number) {
+  // 0 +2
+  // 1 nic
+  // 2 -2
+  switch (number % 3) {
+    case 0:
+      return number + 2;
+      break;
+    case 1:
+      return number;
+      break;
+    case 2:
+      return number - 2;
+      break;
+  }
+}
 
 TaskHandle_t TaskVU;
 void TaskVUcode(void *pvParameters) {
   static unsigned long lastPeakTime;
   for (;;) {
-    //Serial.println("Jedu");
-    // Init data with only one led ON
-    /* int led, col, bit;
-    int i=0;
-    for (led=0; led<NR_OF_LEDS; led++) {
-        for (col=0; col<3; col++ ) {
-            for (bit=0; bit<8; bit++){
-                if ( (color[col] & (1<<(7-bit))) && (led == led_index) ) {
-                    led_data[i].level0 = 1;
-                    led_data[i].duration0 = 8;
-                    led_data[i].level1 = 0;
-                    led_data[i].duration1 = 4;
-                } else {
-                    led_data[i].level0 = 1;
-                    led_data[i].duration0 = 4;
-                    led_data[i].level1 = 0;
-                    led_data[i].duration1 = 8;
-                }
-                i++;
-            }
-        }
-    }
-    // make the led travel in the pannel
-    if ((++led_index)>=NR_OF_LEDS) {
-        led_index = 0;
+
+    if (currCulNo) {
+      //songRefresh();
+      for (int i; i < NUM_BANDS; i++)
+        drawLineT(i, 'a', i);
+      rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
+      vTaskDelay(10000 / portTICK_PERIOD_MS);
+      currCulNo = 0;
     }
 
-    // Send the data
-    rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-    //delay(100);
-*/
-
-    //Serial.println("Jedu");
-    // if (VUon && !currCulNo)
     if (!VUon) {
-
       // Reset bandValues[]
       for (int i = 0; i < NUM_BANDS; i++) {
         bandValues[i] = 0;
@@ -218,16 +219,26 @@ void TaskVUcode(void *pvParameters) {
         if (vReal[i] > NOISE) {                  // Add a crude noise filter
 
           //10 bands 40000/512= 39
-          if (i <= 2) bandValues[0] += (int)vReal[i];               //0-0
-          if (i > 2 && i <= 4) bandValues[1] += (int)vReal[i];      //1-1
-          if (i > 4 && i <= 7) bandValues[2] += (int)vReal[i];      //2-3
-          if (i > 7 && i <= 12) bandValues[3] += (int)vReal[i];     //4-7
-          if (i > 12 && i <= 21) bandValues[4] += (int)vReal[i];    //8-15
-          if (i > 21 && i <= 38) bandValues[5] += (int)vReal[i];    //16-31
-          if (i > 38 && i <= 72) bandValues[6] += (int)vReal[i];    //32-63
-          if (i > 72 && i <= 138) bandValues[7] += (int)vReal[i];   //64-127
-          if (i > 138 && i <= 240) bandValues[8] += (int)vReal[i];  //128-255
-          if (i > 240) bandValues[9] += (int)vReal[i];              //256-512
+          //if (i <= 2) bandValues[0] += (int)vReal[i];               //0-0
+          //if (i > 2 && i <= 4) bandValues[1] += (int)vReal[i];      //1-1
+          //if (i > 4 && i <= 7) bandValues[2] += (int)vReal[i];      //2-3
+          //if (i > 7 && i <= 12) bandValues[3] += (int)vReal[i];     //4-7
+          //if (i > 12 && i <= 21) bandValues[4] += (int)vReal[i];    //8-15
+          //if (i > 21 && i <= 38) bandValues[5] += (int)vReal[i];    //16-31
+          //if (i > 38 && i <= 72) bandValues[6] += (int)vReal[i];    //32-63
+          //if (i > 72 && i <= 138) bandValues[7] += (int)vReal[i];   //64-127
+          //if (i > 138 && i <= 240) bandValues[8] += (int)vReal[i];  //128-255
+          //if (i > 240) bandValues[9] += (int)vReal[i];              //256-512
+          if (i <= 5) bandValues[0] += (int)vReal[i];
+          if (i > 5 && i <= 10) bandValues[1] += (int)vReal[i];
+          if (i > 10 && i <=19) bandValues[2] += (int)vReal[i];
+          if (i > 19 && i <= 35) bandValues[3] += (int)vReal[i];
+          if (i > 35 && i <= 65) bandValues[4] += (int)vReal[i];
+          if (i > 65 && i <=105) bandValues[5] += (int)vReal[i];
+          if (i > 105 && i <= 180) bandValues[6] += (int)vReal[i];
+          if (i > 180 && i <= 240) bandValues[7] += (int)vReal[i];
+          if (i > 240 && i <= 340) bandValues[8] += (int)vReal[i];
+          if (i > 340) bandValues[9] += (int)vReal[i];
         }
       }
 
@@ -257,7 +268,7 @@ void TaskVUcode(void *pvParameters) {
 #else
         for (int i = 0; i < TOP; i++) {
           int bit;
-          int j = (179 - ((band * TOP) + i)) * 8;
+          int j = swapLED(179 - ((band * TOP) + i)) * 8;
           //Serial.println(j);
           if (((barHeight > i && !bar) || (peak[band] == i + 1 && !top))) {
             for (bit = 0; bit < 5; bit++) {
@@ -304,21 +315,22 @@ void TaskVUcode(void *pvParameters) {
           if (peak[band] > 0) peak[band] -= 1;
         lastPeakTime = nowMillisTime;
       }
-      vTaskDelay(10 / portTICK_PERIOD_MS);
+      //vTaskDelay(10 / portTICK_PERIOD_MS);
     } else {
 #ifdef ADAFRUIT
       pixels.clear();
 #else
-      /*   for (int j = 0; j < 179 * 8; j++) {
+      for (int j = 0; j < 179 * 8; j++) {
         led_data[j].level0 = 1;
         led_data[j].duration0 = 4;
         led_data[j].level1 = 0;
         led_data[j].duration1 = 8;
       }
-      rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);*/
+      rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
 #endif
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+      //vTaskDelay(100 / portTICK_PERIOD_MS);
     }
+    feedTheDog();
   }
 }
 
@@ -435,21 +447,6 @@ void setup() {
 
 void loop() {
   //ArduinoOTA.handle();
-
-  //  audio.loop();
-
-  //songRefresh();
-  //Serial.println(".");
-  //buttonCheck();
-
-  /* static unsigned long cas3 = millis();
-  if (millis() - cas3 > 30000) {
-    stationUpDown(1);
-    cas3 = millis();
-    //  pixels.setPixelColor(infolnc, pixels.Color(0, 127, 255));
-    //  pixels.show();
-  }
-  */
 }
 
 int lastButtonState[NUM_BUTTONS], buttonState[NUM_BUTTONS];
@@ -525,6 +522,23 @@ void buttonCheck() {
 
   songName = digitalRead(SONG_PIN);
 
+  if (VUon != digitalRead(VU_PIN)) {
+    if (VUon != -1)
+      VUon = !VUon;
+    if (VUon) {
+      digitalWrite(VU_LED_PIN, LOW);
+      digitalWrite(BAR_LED_PIN, LOW);
+      digitalWrite(TOP_LED_PIN, LOW);
+    } else {
+      digitalWrite(VU_LED_PIN, HIGH);
+      top = 1;
+      bar = 1;
+    }
+#ifdef DEBUG
+    Serial.print("VUon de-activated: ");
+    Serial.println(VUon);
+#endif
+  }
   if (top != digitalRead(TOP_PIN)) {
     if (top != -1)
       top = !top;
@@ -550,38 +564,8 @@ void buttonCheck() {
     Serial.println(bar);
 #endif
   }
-  if (VUon != digitalRead(VU_PIN)) {
-    if (VUon != -1)
-      VUon = !VUon;
-    if (VUon)
-      digitalWrite(VU_LED_PIN, LOW);
-    else
-      digitalWrite(VU_LED_PIN, HIGH);
-#ifdef DEBUG
-    Serial.print("VUon de-activated: ");
-    Serial.println(VUon);
-#endif
-  }
 }
-/*
-void ledLightSetting(int pinNumber) {
-  switch (pinNumber) {
-    case LIGHT_UP_PIN:
-      ledBrightness *= 1.3;
-      if (ledBrightness > 255) ledBrightness = 255;
-      break;
-    case LIGHT_DOWN_PIN:
-      ledBrightness /= 1.3;
-      if (ledBrightness < 10) ledBrightness = 10;
-      break;
-  }
-  pref.putUShort("ledBrightness", ledBrightness);
-#ifdef DEBUG
-  Serial.print("Pin activated: ");
-  Serial.println(pinNumber);
-#endif
-}
-*/
+
 void VUsetting(int pinNumber) {
   switch (pinNumber) {
     case LVL_UP_PIN:
@@ -647,16 +631,36 @@ extern byte alphabets[][16] = { { B00000000,
                                   B11000011,
                                   B11000011 } };
 
+
 void drawLineT(int bar, char pismeno, int sloupec) {
-  int alphabetIndex = msg[pismeno] - '@';
+  int alphabetIndex = toupper(msg[pismeno]) - '@';
   if (alphabetIndex < 0) alphabetIndex = 0;
 
-  //for (int i = 0; i < 18 / 3; i += 3) {  //draw one band/bar  (INPUT >> N) & 1;
-  //  pixels.setPixelColor(bar * 18 + i, pixels.Color(
-  //                                       ((alphabets[alphabetIndex][i] >> (7 - sloupec)) & 1) ? ledBrightness : 0,
-  //                                       ((alphabets[alphabetIndex][i + 1] >> (7 - sloupec)) & 1) ? ledBrightness : 0,
-  //                                       ((alphabets[alphabetIndex][i + 2] >> (7 - sloupec)) & 1) ? ledBrightness : 0));
-  // }
+  for (int i = 0; i < TOP; i++) {
+    int bit;
+    int j = swapLED(179 - ((bar * TOP) + i)) * 8;
+    if ((alphabets[alphabetIndex][TOP - i - 1] >> (7 - sloupec)) & 1) {
+      for (bit = 0; bit < 5; bit++) {
+        led_data[j + bit].level0 = 1;
+        led_data[j + bit].duration0 = 4;
+        led_data[j + bit].level1 = 0;
+        led_data[j + bit].duration1 = 8;
+      }
+      for (; bit < 8; bit++) {
+        led_data[j + bit].level0 = 1;
+        led_data[j + bit].duration0 = 8;
+        led_data[j + bit].level1 = 0;
+        led_data[j + bit].duration1 = 4;
+      }
+    } else {
+      for (bit = 0; bit < 8; bit++) {
+        led_data[j + bit].level0 = 1;
+        led_data[j + bit].duration0 = 4;
+        led_data[j + bit].level1 = 0;
+        led_data[j + bit].duration1 = 8;
+      }
+    }
+  }
 }
 
 void songRefresh(void) {
