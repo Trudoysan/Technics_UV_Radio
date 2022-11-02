@@ -188,6 +188,21 @@ void TaskVUcode(void *pvParameters) {
         drawLineT(i, 'a', i);
       rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
       vTaskDelay(10000 / portTICK_PERIOD_MS);
+      for (int k; k < 5; k++){     
+        for (int j; j < NUM_BANDS; j++){
+          for (int i; i < NUM_BANDS; i++)
+            drawLineT(i, 'a', (i+j)%NUM_BANDS);
+          rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
+          vTaskDelay(500 / portTICK_PERIOD_MS);
+        }
+        for (int j; j < NUM_BANDS; j++){
+          for (int i; i < NUM_BANDS; i++)
+            drawLineT(i, 'a', (i+3*j)%NUM_BANDS);
+          rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
+          vTaskDelay(200 / portTICK_PERIOD_MS);
+        }
+
+      }
       currCulNo = 0;
     }
 
