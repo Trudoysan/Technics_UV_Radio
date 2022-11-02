@@ -184,25 +184,20 @@ void TaskVUcode(void *pvParameters) {
 
     if (currCulNo) {
       //songRefresh();
-      for (int i; i < NUM_BANDS; i++)
-        drawLineT(i, 'a', i);
+      //Serial.print("currCulNo: ");
+      //Serial.println(currCulNo);
+      for (int i = 0; i < NUM_BANDS; i++)
+        drawLineT(i, 'a', (i+3)%NUM_BANDS);
       rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
-      vTaskDelay(10000 / portTICK_PERIOD_MS);
-      for (int k; k < 5; k++){     
-        for (int j; j < NUM_BANDS; j++){
-          for (int i; i < NUM_BANDS; i++)
-            drawLineT(i, 'a', (i+j)%NUM_BANDS);
+      vTaskDelay(100000 / portTICK_PERIOD_MS);
+      /*for (int k = 0; k < 5; k++) {
+        for (int j = 0; j < NUM_BANDS; j++) {
+          for (int i = 0; i < NUM_BANDS; i++)
+            drawLineT(i, 'a', (i + 4 * j) % NUM_BANDS);
           rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
           vTaskDelay(500 / portTICK_PERIOD_MS);
         }
-        for (int j; j < NUM_BANDS; j++){
-          for (int i; i < NUM_BANDS; i++)
-            drawLineT(i, 'a', (i+3*j)%NUM_BANDS);
-          rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
-          vTaskDelay(200 / portTICK_PERIOD_MS);
-        }
-
-      }
+      }*/
       currCulNo = 0;
     }
 
@@ -246,10 +241,10 @@ void TaskVUcode(void *pvParameters) {
           //if (i > 240) bandValues[9] += (int)vReal[i];              //256-512
           if (i <= 5) bandValues[0] += (int)vReal[i];
           if (i > 5 && i <= 10) bandValues[1] += (int)vReal[i];
-          if (i > 10 && i <=19) bandValues[2] += (int)vReal[i];
+          if (i > 10 && i <= 19) bandValues[2] += (int)vReal[i];
           if (i > 19 && i <= 35) bandValues[3] += (int)vReal[i];
           if (i > 35 && i <= 65) bandValues[4] += (int)vReal[i];
-          if (i > 65 && i <=105) bandValues[5] += (int)vReal[i];
+          if (i > 65 && i <= 105) bandValues[5] += (int)vReal[i];
           if (i > 105 && i <= 180) bandValues[6] += (int)vReal[i];
           if (i > 180 && i <= 240) bandValues[7] += (int)vReal[i];
           if (i > 240 && i <= 340) bandValues[8] += (int)vReal[i];
@@ -613,7 +608,7 @@ void stationUpDown(int upDown) {
 }
 
 //FONT DEFENITION
-extern byte alphabets[][16] = { { B00000000,
+extern byte alphabets[][18] = { { B00000000,
                                   B00000000,
                                   B00000000,
                                   B00000000,
@@ -628,8 +623,11 @@ extern byte alphabets[][16] = { { B00000000,
                                   B00000000,
                                   B00000000,
                                   B00000000,
+                                  B00000000,
+                                  B00000000,
                                   B00000000 },
-                                { B00011000,
+                                { B00000000,
+                                  B00011000,
                                   B00011000,
                                   B00011000,
                                   B00111100,
@@ -644,16 +642,24 @@ extern byte alphabets[][16] = { { B00000000,
                                   B01100110,
                                   B01000010,
                                   B11000011,
-                                  B11000011 } };
+                                  B11000011,
+                                  B00000000 } };
 
 
 void drawLineT(int bar, char pismeno, int sloupec) {
-  int alphabetIndex = toupper(msg[pismeno]) - '@';
+  int alphabetIndex = toupper(pismeno) - '@';
   if (alphabetIndex < 0) alphabetIndex = 0;
-
+  Serial.print("pismeno: ");
+  Serial.print(alphabetIndex);
+  Serial.print(" ");
+  Serial.print((int)'@');
+  Serial.print(" ");
+  Serial.print((int)toupper(pismeno));
   for (int i = 0; i < TOP; i++) {
     int bit;
     int j = swapLED(179 - ((bar * TOP) + i)) * 8;
+    Serial.print(" b: ");
+    Serial.print(((alphabets[alphabetIndex][TOP - i - 1] >> (7 - sloupec)) & 1));
     if ((alphabets[alphabetIndex][TOP - i - 1] >> (7 - sloupec)) & 1) {
       for (bit = 0; bit < 5; bit++) {
         led_data[j + bit].level0 = 1;
@@ -676,6 +682,7 @@ void drawLineT(int bar, char pismeno, int sloupec) {
       }
     }
   }
+  Serial.println("");
 }
 
 void songRefresh(void) {
