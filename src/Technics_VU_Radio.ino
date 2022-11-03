@@ -189,15 +189,15 @@ void TaskVUcode(void *pvParameters) {
       for (int i = 0; i < NUM_BANDS; i++)
         drawLineT(i, 'a', (i+3)%NUM_BANDS);
       rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
-      vTaskDelay(100000 / portTICK_PERIOD_MS);
-      /*for (int k = 0; k < 5; k++) {
+      vTaskDelay(10000 / portTICK_PERIOD_MS);
+      for (int k = 0; k < 5; k++) {
         for (int j = 0; j < NUM_BANDS; j++) {
           for (int i = 0; i < NUM_BANDS; i++)
-            drawLineT(i, 'a', (i + 4 * j) % NUM_BANDS);
+            drawLineT(i, 'a', (3*i + j));
           rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
           vTaskDelay(500 / portTICK_PERIOD_MS);
         }
-      }*/
+      }
       currCulNo = 0;
     }
 
@@ -608,7 +608,7 @@ void stationUpDown(int upDown) {
 }
 
 //FONT DEFENITION
-extern byte alphabets[][18] = { { B00000000,
+extern byte alphabets[][18] = { { B00000000, //space -everything outside of A--Z, a--z
                                   B00000000,
                                   B00000000,
                                   B00000000,
@@ -626,7 +626,7 @@ extern byte alphabets[][18] = { { B00000000,
                                   B00000000,
                                   B00000000,
                                   B00000000 },
-                                { B00000000,
+                                { B00000000, //A
                                   B00011000,
                                   B00011000,
                                   B00011000,
@@ -643,12 +643,30 @@ extern byte alphabets[][18] = { { B00000000,
                                   B01000010,
                                   B11000011,
                                   B11000011,
+                                  B00000000 }                                
+                                { B00000000, //B
+                                  B11111100,
+                                  B11111110,
+                                  B11000111,
+                                  B11000011,
+                                  B11000011,
+                                  B11000011,
+                                  B11000111,
+                                  B11111100,  //8
+                                  B11111100,
+                                  B11000111,
+                                  B11000011,
+                                  B11000011,
+                                  B11000011,
+                                  B11000111,
+                                  B11111110,
+                                  B11111100,
                                   B00000000 } };
 
 
 void drawLineT(int bar, char pismeno, int sloupec) {
   int alphabetIndex = toupper(pismeno) - '@';
-  if (alphabetIndex < 0) alphabetIndex = 0;
+  if (alphabetIndex < 0 || alphabetIndex > 26) alphabetIndex = 0; //space if outside of A [1] - Z [26]
   Serial.print("pismeno: ");
   Serial.print(alphabetIndex);
   Serial.print(" ");
@@ -660,7 +678,7 @@ void drawLineT(int bar, char pismeno, int sloupec) {
     int j = swapLED(179 - ((bar * TOP) + i)) * 8;
     Serial.print(" b: ");
     Serial.print(((alphabets[alphabetIndex][TOP - i - 1] >> (7 - sloupec)) & 1));
-    if ((alphabets[alphabetIndex][TOP - i - 1] >> (7 - sloupec)) & 1) {
+    if (sloupec < 8 && ((alphabets[alphabetIndex][TOP - i - 1] >> (7 - sloupec)) & 1)) {
       for (bit = 0; bit < 5; bit++) {
         led_data[j + bit].level0 = 1;
         led_data[j + bit].duration0 = 4;
