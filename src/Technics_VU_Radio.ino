@@ -65,7 +65,7 @@ int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
 #define SAMPLES 1024  // Must be a power of 2
 //#define SAMPLES 128          // Must be a power of 2
 #define SAMPLING_FREQ 40000  // Hz, must be 40000 or less due to ADC conversion time. Determines maximum frequency that can be analysed by the FFT Fmax=sampleF/2.
-int amplitude = 10000;       // Depending on your audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
+int amplitude = 1000;        // Depending on your audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
 
 Audio audio;
 
@@ -76,7 +76,7 @@ int ledBrightness = 32;  //store led Brightness, maybe different for different c
 bool bar = 1, top = 1, radioOn, VUon, songName;
 
 #define NUM_BANDS 10  // To change this, you will need to change the bunch of if statements describing the mapping from bins to bands
-#define NOISE 200//500     // Used as a crude noise filter, values below this are ignored
+//int noise = amplitude/5;// 200//500     // Used as a crude noise filter, values below this are ignored
 
 //const uint8_t kMatrixWidth = 16;                 // Matrix width
 //const uint8_t kMatrixHeight = 16;                // Matrix height
@@ -270,8 +270,9 @@ void TaskVUcode(void *pvParameters) {
 
       // Analyse FFT results
       for (int i = 2; i < (SAMPLES / 2); i++) {  // Don't use sample 0 and only first SAMPLES/2 are usable. Each array element represents a frequency bin and its value the amplitude.
-        if (vReal[i] > NOISE) {                  // Add a crude noise filter
-
+        if (vReal[i] > amplitude / 5) {          // Add a crude noise filter
+          //y = log(x)
+          vReal[i] = (vReal[i] - amplitude / 5);
           //10 bands 40000/512= 39
           if (i <= 2) bandValues[0] += (int)vReal[i];               //0-0
           if (i > 2 && i <= 4) bandValues[1] += (int)vReal[i];      //1-1
@@ -420,10 +421,6 @@ void setup() {
   if (pref.isKey("station")) infolnc = pref.getUShort("station");
   if (infolnc >= STATIONS) infolnc = 0;
 
-  /* audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-  audio.setVolume(21);  // 0...21
-  audio.connecttohost(stationlist[infolnc]);
-*/
   sampling_period_us = round(1000000 * (1.0 / SAMPLING_FREQ));  //1.5??
 
   for (int i = 0; i < NUM_BUTTONS; i++)
@@ -452,7 +449,7 @@ void setup() {
   }
   float realTick = rmtSetTick(rmt_send, 100);
   Serial.printf("real tick set to: %fns\n", realTick);
-   for (int k = 0; k < 9 + TOP * 2; k++) {
+  for (int k = 0; k < 9 + TOP * 2; k++) {
     for (int band = 0; band < NUM_BANDS; band++) {
       for (int i = 0; i < TOP; i++) {
         int j = swapLED(179 - ((band * TOP) + i)) * 8;
@@ -543,13 +540,13 @@ void buttonCheck() {
               VUsetting(LVL_DOWN_PIN);
               break;
           }
-        } else {
+        } /*else {
           if ((currentMillis - lastPlayDebounceTime[i]) > 500) {
 #ifdef DEBUG
             Serial.println("Long press");
 #endif
           }
-        }
+        }*/
       }
     }
     lastButtonState[i] = buttonRead;
@@ -649,7 +646,7 @@ void stationUpDown(int upDown) {
 #endif
   }
 }
-
+/*
 //FONT DEFENITION
 extern byte alphabets[][18] = {
 
@@ -707,24 +704,6 @@ extern byte alphabets[][18] = {
     B10000100,
     B11111000,
     B00000000 },
-  /* { B00000000,  //B
-    B11000000,
-    B10000000,
-    B10000000,
-    B10100000,
-    B10100000,
-    B10000000,
-    B10000000,
-    B11000000,  //8
-    B10000000,
-    B10000000,
-    B10100000,
-    B10100000,
-    B10100000,
-    B10000000,
-    B10000000,
-    B11000000,
-    B00000000 },*/
   { B00000000,  //C
     B01000000,
     B00000000,
@@ -1163,12 +1142,6 @@ extern byte alphabets[][18] = {
 void drawLineT(int bar, char pismeno, int sloupec) {
   int alphabetIndex = toupper(pismeno) - '@';
   if (alphabetIndex < 0 || alphabetIndex > 26) alphabetIndex = 0;  //space if outside of A [1] - Z [26]
-                                                                   /* Serial.print("pismeno: ");
-  Serial.print(alphabetIndex);
-  Serial.print(" ");
-  Serial.print((int)'@');
-  Serial.print(" ");
-  Serial.print((int)toupper(pismeno));*/
   for (int i = 0; i < TOP; i++) {
     //int bit;
     int j = swapLED(179 - ((bar * TOP) + i)) * 8;
@@ -1183,7 +1156,7 @@ void drawLineT(int bar, char pismeno, int sloupec) {
     // Serial.println("");
   }
 }
-
+*/
 // optional
 /*void audio_info(const char *info) {
   Serial.print("info        ");
