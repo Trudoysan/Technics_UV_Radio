@@ -76,7 +76,7 @@ int ledBrightness = 32;  //store led Brightness, maybe different for different c
 bool bar = 1, top = 1, radioOn, VUon, songName;
 
 #define NUM_BANDS 10  // To change this, you will need to change the bunch of if statements describing the mapping from bins to bands
-#define NOISE 500     // Used as a crude noise filter, values below this are ignored
+#define NOISE 200//500     // Used as a crude noise filter, values below this are ignored
 
 //const uint8_t kMatrixWidth = 16;                 // Matrix width
 //const uint8_t kMatrixHeight = 16;                // Matrix height
@@ -106,8 +106,8 @@ unsigned long newTime;
 arduinoFFT FFT = arduinoFFT(vReal, vImag, SAMPLES, SAMPLING_FREQ);
 
 
-#define SSID "****"
-#define PSK "****"
+#define SSID "Hlava_RPT"
+#define PSK "hlavouni"
 
 #define STATIONS 15
 char *stationlist[STATIONS] = {
@@ -136,10 +136,14 @@ char msg[50];
 
 TaskHandle_t TaskAudio;
 void TaskAudiocode(void *pvParameters) {
-  // Serial.print("Task1 running on core ");
-  // Serial.println(xPortGetCoreID());
+  Serial.print("TaskAudio running on core ");
+  Serial.println(xPortGetCoreID());
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(21);  // 0...21
+  Serial.print("Audio task started: ");
+  Serial.print(radioOn);
+  Serial.print(" on station: ");
+  Serial.println(infolnc);
   if (!radioOn)
     audio.connecttohost(stationlist[infolnc]);
 
@@ -176,31 +180,75 @@ int swapLED(int number) {
       break;
   }
 }
+void setLedOn(int number) {
+  int bit;
+  for (bit = 0; bit < 5; bit++) {
+    led_data[number + bit].level0 = 1;
+    led_data[number + bit].duration0 = 4;
+    led_data[number + bit].level1 = 0;
+    led_data[number + bit].duration1 = 8;
+  }
+  for (; bit < 8; bit++) {
+    led_data[number + bit].level0 = 1;
+    led_data[number + bit].duration0 = 8;
+    led_data[number + bit].level1 = 0;
+    led_data[number + bit].duration1 = 4;
+  }
+}
+void setLedOff(int number) {
+  for (int bit = 0; bit < 8; bit++) {
+    led_data[number + bit].level0 = 1;
+    led_data[number + bit].duration0 = 4;
+    led_data[number + bit].level1 = 0;
+    led_data[number + bit].duration1 = 8;
+  }
+}
 
 TaskHandle_t TaskVU;
 void TaskVUcode(void *pvParameters) {
-  static unsigned long lastPeakTime;
+  static unsigned long lastTime;
+  static int j, k;
   for (;;) {
-
+    /*
     if (currCulNo) {
       //songRefresh();
       //Serial.print("currCulNo: ");
       //Serial.println(currCulNo);
-      for (int i = 0; i < NUM_BANDS; i++)
-        drawLineT(i, 'a', (i+3)%NUM_BANDS);
-      rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
-      vTaskDelay(10000 / portTICK_PERIOD_MS);
-      for (int k = 0; k < 5; k++) {
-        for (int j = 0; j < NUM_BANDS; j++) {
-          for (int i = 0; i < NUM_BANDS; i++)
-            drawLineT(i, 'a', (3*i + j));
-          rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
-          vTaskDelay(500 / portTICK_PERIOD_MS);
+      //for (int i = 0; i < NUM_BANDS; i++)
+      // drawLineT(i, 'a', (i + 3) % NUM_BANDS);
+      //rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
+      //vTaskDelay(10000 / portTICK_PERIOD_MS);
+      //strcpy(msg, "  abab  ");
+      //currCulNo = 30;
+
+      //for (int k = 0; k < 5; k++) {
+      //for (int j = 0; j < currCulNo; j++) {
+
+      unsigned long nowMillisTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
+      if (nowMillisTime - lastTime > 150) {
+        lastTime = nowMillisTime;
+        for (int i = 0; i < NUM_BANDS; i++)
+          //  drawLineT(i, 'b', j == i ? 0 : 9);
+          //  drawLineT(i, msg[(j + i*3 + 1) / 10], (j + i*3 + 1) % 10);
+          drawLineT(i, msg[(j + i + 1) / 5], ((j + i + 1) % 5));
+        rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
+        //vTaskDelay(150 / portTICK_PERIOD_MS);
+        //drawingCharBar++;
+        // }
+        //}
+        // drawLineT(i, msg[(10 + drawingCharBar - i) / 10], (10 + drawingCharBar - i) % 10);
+        // drawLineT(i, msg[(10 + drawingCharBar - (i*3)) / 10], (10 + drawingCharBar - (i*3)) % 10);
+        j++;
+        if (j >= currCulNo) {
+          j = 0;
+          k++;
+          if (k >= 2) {
+            k = 0;
+            currCulNo = 0;
+          }
         }
       }
-      currCulNo = 0;
-    }
-
+    } else */
     if (!VUon) {
       // Reset bandValues[]
       for (int i = 0; i < NUM_BANDS; i++) {
@@ -239,16 +287,16 @@ void TaskVUcode(void *pvParameters) {
           //if (i > 72 && i <= 138) bandValues[7] += (int)vReal[i];   //64-127
           //if (i > 138 && i <= 240) bandValues[8] += (int)vReal[i];  //128-255
           //if (i > 240) bandValues[9] += (int)vReal[i];              //256-512
-          if (i <= 5) bandValues[0] += (int)vReal[i];
-          if (i > 5 && i <= 10) bandValues[1] += (int)vReal[i];
-          if (i > 10 && i <= 19) bandValues[2] += (int)vReal[i];
-          if (i > 19 && i <= 35) bandValues[3] += (int)vReal[i];
-          if (i > 35 && i <= 65) bandValues[4] += (int)vReal[i];
-          if (i > 65 && i <= 105) bandValues[5] += (int)vReal[i];
-          if (i > 105 && i <= 180) bandValues[6] += (int)vReal[i];
-          if (i > 180 && i <= 240) bandValues[7] += (int)vReal[i];
-          if (i > 240 && i <= 340) bandValues[8] += (int)vReal[i];
-          if (i > 340) bandValues[9] += (int)vReal[i];
+          if (i <= 4) bandValues[0] += (int)vReal[i];
+          if (i > 4 && i <= 8) bandValues[1] += (int)vReal[i];
+          if (i > 8 && i <= 18) bandValues[2] += (int)vReal[i];
+          if (i > 18 && i <= 37) bandValues[3] += (int)vReal[i];
+          if (i > 37 && i <= 70) bandValues[4] += (int)vReal[i];
+          if (i > 70 && i <= 115) bandValues[5] += (int)vReal[i];
+          if (i > 115 && i <= 200) bandValues[6] += (int)vReal[i];
+          if (i > 200 && i <= 240) bandValues[7] += (int)vReal[i];
+          if (i > 280 && i <= 400) bandValues[8] += (int)vReal[i];
+          if (i > 400) bandValues[9] += (int)vReal[i];
         }
       }
 
@@ -256,6 +304,7 @@ void TaskVUcode(void *pvParameters) {
       for (byte band = 0; band < NUM_BANDS; band++) {
 
         // Scale the bars for the display
+        //int barHeight = bandValues[band] / amplitude;
         int barHeight = bandValues[band] / amplitude;
         if (barHeight > TOP) barHeight = TOP;
 
@@ -277,29 +326,13 @@ void TaskVUcode(void *pvParameters) {
         }
 #else
         for (int i = 0; i < TOP; i++) {
-          int bit;
+          //int bit;
           int j = swapLED(179 - ((band * TOP) + i)) * 8;
           //Serial.println(j);
           if (((barHeight > i && !bar) || (peak[band] == i + 1 && !top))) {
-            for (bit = 0; bit < 5; bit++) {
-              led_data[j + bit].level0 = 1;
-              led_data[j + bit].duration0 = 4;
-              led_data[j + bit].level1 = 0;
-              led_data[j + bit].duration1 = 8;
-            }
-            for (; bit < 8; bit++) {
-              led_data[j + bit].level0 = 1;
-              led_data[j + bit].duration0 = 8;
-              led_data[j + bit].level1 = 0;
-              led_data[j + bit].duration1 = 4;
-            }
+            setLedOn(j);
           } else {
-            for (bit = 0; bit < 8; bit++) {
-              led_data[j + bit].level0 = 1;
-              led_data[j + bit].duration0 = 4;
-              led_data[j + bit].level1 = 0;
-              led_data[j + bit].duration1 = 8;
-            }
+            setLedOff(j);
           }
         }
 #endif
@@ -314,28 +347,24 @@ void TaskVUcode(void *pvParameters) {
 #endif
       // Decay peak
       unsigned long nowMillisTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
-#ifdef DEBUG
+#ifdef DEBUG2
       Serial.print("nowMillisTime: ");
       Serial.print(nowMillisTime);
-      Serial.print(". lastPeakTime: ");
-      Serial.println(lastPeakTime);
+      Serial.print(". lastTime: ");
+      Serial.println(lastTime);
 #endif
-      if (nowMillisTime - lastPeakTime > 180) {  //60
+      if (nowMillisTime - lastTime > 180) {  //60
         for (byte band = 0; band < NUM_BANDS; band++)
           if (peak[band] > 0) peak[band] -= 1;
-        lastPeakTime = nowMillisTime;
+        lastTime = nowMillisTime;
       }
       //vTaskDelay(10 / portTICK_PERIOD_MS);
     } else {
 #ifdef ADAFRUIT
       pixels.clear();
 #else
-      for (int j = 0; j < 179 * 8; j++) {
-        led_data[j].level0 = 1;
-        led_data[j].duration0 = 4;
-        led_data[j].level1 = 0;
-        led_data[j].duration1 = 8;
-      }
+      for (int j = 0; j < 179 * 8; j += 8)
+        setLedOff(j);
       rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
 #endif
       //vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -427,14 +456,29 @@ void setup() {
   }
   float realTick = rmtSetTick(rmt_send, 100);
   Serial.printf("real tick set to: %fns\n", realTick);
+   for (int k = 0; k < 9 + TOP * 2; k++) {
+    for (int band = 0; band < NUM_BANDS; band++) {
+      for (int i = 0; i < TOP; i++) {
+        int j = swapLED(179 - ((band * TOP) + i)) * 8;
+        //       if ((i <= k && k < TOP) || (k >= TOP && (TOP - i) > (2 * TOP) - k)) {
+        if ((i <= k - band) && (i <= 8 + 2 * TOP - k - (NUM_BANDS - band))) {  //18, k 0-35, band 0-9
+          setLedOn(j);
+        } else {
+          setLedOff(j);
+        }
+      }
+    }
+    rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
+    vTaskDelay(30 / portTICK_PERIOD_MS);
+  }
 #endif
-
+  Serial.println("leds startup ends\n");
   radioOn = -1;  // to light up LEDs
   VUon = -1;
   top = -1;
   bar = -1;
   buttonCheck();
-
+  Serial.println("tasks starts\n");
   xTaskCreatePinnedToCore(
     TaskAudiocode,
     "TaskAudio",
@@ -452,6 +496,7 @@ void setup() {
     8,          /* Priority of the task */
     &TaskVU,    /* Task handle. */
     0);
+  Serial.println("tasks started\n");
 }
 
 
@@ -594,134 +639,552 @@ void VUsetting(int pinNumber) {
 #endif
 }
 void stationUpDown(int upDown) {
-  audio.stopSong();
-  infolnc += upDown;
-  if (infolnc >= STATIONS)
-    infolnc = 0;
-  else if (infolnc < 0)
-    infolnc = STATIONS - 1;
-  pref.putUShort("station", infolnc);
-  audio.connecttohost(stationlist[infolnc]);
+  if (!radioOn) {
+    audio.stopSong();
+    infolnc += upDown;
+    if (infolnc >= STATIONS)
+      infolnc = 0;
+    else if (infolnc < 0)
+      infolnc = STATIONS - 1;
+    pref.putUShort("station", infolnc);
+    audio.connecttohost(stationlist[infolnc]);
 #ifdef DEBUG
-  Serial.println(infolnc);
+    Serial.println(infolnc);
 #endif
+  }
 }
 
 //FONT DEFENITION
-extern byte alphabets[][18] = { { B00000000, //space -everything outside of A--Z, a--z
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,  //8
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,
-                                  B00000000,
-                                  B00000000 },
-                                { B00000000, //A
-                                  B00011000,
-                                  B00011000,
-                                  B00011000,
-                                  B00111100,
-                                  B00111100,
-                                  B00111100,
-                                  B00100100,
-                                  B00100100,  //8
-                                  B01100110,
-                                  B01111110,
-                                  B01111110,
-                                  B01100110,
-                                  B01100110,
-                                  B01000010,
-                                  B11000011,
-                                  B11000011,
-                                  B00000000 }                                
-                                { B00000000, //B
-                                  B11111100,
-                                  B11111110,
-                                  B11000111,
-                                  B11000011,
-                                  B11000011,
-                                  B11000011,
-                                  B11000111,
-                                  B11111100,  //8
-                                  B11111100,
-                                  B11000111,
-                                  B11000011,
-                                  B11000011,
-                                  B11000011,
-                                  B11000111,
-                                  B11111110,
-                                  B11111100,
-                                  B00000000 } };
+extern byte alphabets[][18] = {
+
+  { B00000000,  //space -everything outside of A--Z, a--z
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,  //8
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000 },
+  { B00000000,  //A
+    B01000000,
+    B01000000,
+    B01000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,  //8
+    B10100000,
+    B10100000,
+    B10100000,
+    B11100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B00000000 },
+  { B00000000,  //B
+    B11111000,
+    B10000100,
+    B10000010,
+    B10000001,
+    B10000001,
+    B10000010,
+    B10000100,
+    B11111000,  //8
+    B10000100,
+    B10000010,
+    B10000001,
+    B10000001,
+    B10000001,
+    B10000010,
+    B10000100,
+    B11111000,
+    B00000000 },
+  /* { B00000000,  //B
+    B11000000,
+    B10000000,
+    B10000000,
+    B10100000,
+    B10100000,
+    B10000000,
+    B10000000,
+    B11000000,  //8
+    B10000000,
+    B10000000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10000000,
+    B10000000,
+    B11000000,
+    B00000000 },*/
+  { B00000000,  //C
+    B01000000,
+    B00000000,
+    B00000000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10000000,
+    B10000000,  //8
+    B10000000,
+    B10000000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B00000000 },
+  { B00000000,  //D
+    B11000000,
+    B10000000,
+    B10000000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,  //8
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10000000,
+    B10000000,
+    B11000000,
+    B00000000 },
+  { B00000000,  //E
+    B11100000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B11100000,  //8
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B11100000,
+    B00000000 },
+  { B00000000,  //F
+    B11100000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B11100000,  //8
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B00000000 },
+  { B00000000,  //G
+    B01000000,
+    B00000000,
+    B00000000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10000000,
+    B10000000,  //8
+    B10000000,
+    B10000000,
+    B11100000,
+    B10100000,
+    B10100000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B00000000 },
+  { B00000000,  //H
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B11100000,  //8
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B00000000 },
+  { B00000000,  //I
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,  //8
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B00000000 },
+  { B00000000,  //J
+    B00100000,
+    B00100000,
+    B00100000,
+    B00100000,
+    B00100000,
+    B00100000,
+    B00100000,
+    B00100000,  //8
+    B00100000,
+    B00100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B00000000 },
+  { B00000000,  //K
+    B10100000,
+    B10100000,
+    B10000000,
+    B10000000,
+    B11000000,
+    B11000000,
+    B10000000,
+    B10000000,  //8
+    B10000000,
+    B10000000,
+    B11000000,
+    B11000000,
+    B10000000,
+    B10000000,
+    B10100000,
+    B10100000,
+    B00000000 },
+  { B00000000,  //L
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,  //8
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B11100000,
+    B00000000 },
+  { B00000000,  //M
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,  //8
+    B10100000,
+    B10100000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B00000000,
+    B10100000,
+    B10100000,
+    B00000000 },
+  { B00000000,  //N
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B01000000,  //8
+    B01000000,
+    B01000000,
+    B01000000,
+    B00100000,
+    B00100000,
+    B00100000,
+    B10100000,
+    B10100000,
+    B00000000 },
+  { B00000000,  //O
+    B01000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,  //8
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B00000000 },
+  { B00000000,  //P
+    B11000000,
+    B10000000,
+    B10000000,
+    B10100000,
+    B10100000,
+    B10000000,
+    B10000000,
+    B11000000,  //8
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B00000000 },
+  { B00000000,  //Q
+    B01000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,  //8
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B01100000,
+    B00000000 },
+  { B00000000,  //R
+    B11000000,
+    B10000000,
+    B10000000,
+    B10100000,
+    B10100000,
+    B10000000,
+    B10000000,
+    B11000000,  //8
+    B10000000,
+    B10000000,
+    B11000000,
+    B11000000,
+    B10000000,
+    B10000000,
+    B10100000,
+    B10100000,
+    B00000000 },
+  { B00000000,  //S
+    B01000000,
+    B00000000,
+    B00000000,
+    B10100000,
+    B10100000,
+    B00100000,
+    B00100000,
+    B01000000,  //8
+    B01000000,
+    B10000000,
+    B10000000,
+    B10100000,
+    B10100000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B00000000 },
+  { B00000000,  //T
+    B11100000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,  //8
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B00000000 },
+  { B00000000,  //U
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,  //8
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B00000000 },
+  { B00000000,  //V
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,  //8
+    B10100000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B00000000 },
+  { B00000000,  //W
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,  //8
+    B10100000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B00000000 },
+  { B00000000,  //X
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B01000000,  //8
+    B01000000,
+    B00000000,
+    B00000000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B00000000 },
+  { B00000000,  //Y
+    B10100000,
+    B10100000,
+    B10100000,
+    B10100000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B01000000,  //8
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B01000000,
+    B00000000 },
+  { B00000000,  //Z
+    B11100000,
+    B00100000,
+    B00100000,
+    B00100000,
+    B00000000,
+    B00000000,
+    B01000000,
+    B01000000,  //8
+    B01000000,
+    B00000000,
+    B00000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B10000000,
+    B11100000,
+    B00000000 }
+};
 
 
 void drawLineT(int bar, char pismeno, int sloupec) {
   int alphabetIndex = toupper(pismeno) - '@';
-  if (alphabetIndex < 0 || alphabetIndex > 26) alphabetIndex = 0; //space if outside of A [1] - Z [26]
-  Serial.print("pismeno: ");
+  if (alphabetIndex < 0 || alphabetIndex > 26) alphabetIndex = 0;  //space if outside of A [1] - Z [26]
+                                                                   /* Serial.print("pismeno: ");
   Serial.print(alphabetIndex);
   Serial.print(" ");
   Serial.print((int)'@');
   Serial.print(" ");
-  Serial.print((int)toupper(pismeno));
+  Serial.print((int)toupper(pismeno));*/
   for (int i = 0; i < TOP; i++) {
-    int bit;
+    //int bit;
     int j = swapLED(179 - ((bar * TOP) + i)) * 8;
-    Serial.print(" b: ");
-    Serial.print(((alphabets[alphabetIndex][TOP - i - 1] >> (7 - sloupec)) & 1));
-    if (sloupec < 8 && ((alphabets[alphabetIndex][TOP - i - 1] >> (7 - sloupec)) & 1)) {
-      for (bit = 0; bit < 5; bit++) {
-        led_data[j + bit].level0 = 1;
-        led_data[j + bit].duration0 = 4;
-        led_data[j + bit].level1 = 0;
-        led_data[j + bit].duration1 = 8;
-      }
-      for (; bit < 8; bit++) {
-        led_data[j + bit].level0 = 1;
-        led_data[j + bit].duration0 = 8;
-        led_data[j + bit].level1 = 0;
-        led_data[j + bit].duration1 = 4;
-      }
+    //Serial.print(" b: ");
+    //Serial.print(((alphabets[alphabetIndex][TOP - i - 1] >> (7 - sloupec)) & 1));
+    if ((sloupec < 8 && ((alphabets[alphabetIndex][TOP - i - 1] >> (7 - sloupec)) & 1))) {
+      // (sloupec > 0 && sloupec < 9 && ((alphabets[alphabetIndex][TOP - i - 1] >> (8 - sloupec)) & 1))) {
+      setLedOn(j);
     } else {
-      for (bit = 0; bit < 8; bit++) {
-        led_data[j + bit].level0 = 1;
-        led_data[j + bit].duration0 = 4;
-        led_data[j + bit].level1 = 0;
-        led_data[j + bit].duration1 = 8;
-      }
+      setLedOff(j);
     }
-  }
-  Serial.println("");
-}
-
-void songRefresh(void) {
-  static int currCulNoAct = 0;
-  static unsigned long songTime = millis();
-  if (currCulNo) {
-    if (millis() - songTime > 50) {
-      // pixels.clear();
-      if (currCulNo > currCulNoAct) {
-        for (int i = 0; i < NUM_BANDS; i++) {
-          drawLineT(i, msg[(currCulNoAct - NUM_BANDS + 1 + i) / 10], (currCulNoAct - NUM_BANDS + 1 + i) % 10);
-        }
-      } else {
-        currCulNo = 0;
-        //test, zda oz odrolovano
-        //pokud ne, odroluj
-      }
-      //pixels.show();
-      currCulNoAct++;
-      songTime = millis();
-    }
+    // Serial.println("");
   }
 }
 
@@ -749,14 +1212,24 @@ void audio_showstreaminfo(const char *info) {
 void audio_showstreamtitle(const char *info) {
   Serial.print("streamtitle ");
   Serial.println(info);
-  if (songName) {
-    int msgLength = max(strlen(info), sizeof(msg) - 1);
-    strncpy(msg, info, msgLength);
+  /*if (songName) {
+    int msgLength = max(strlen(info), sizeof(msg) - 5);
+    strncpy(msg, "  ", 2);
+
+
+    strncpy(&msg[2], info, msgLength);
+    //msgLength = 10;
+    //strncpy(&msg[2], "ahoj blani", msgLength);
+
+
+    msgLength += 2;
+    strncpy(&msg[msgLength], "  ", 2);
+    currCulNo = msgLength * 5;  //here because the last two spaces are for spare space after the text
+    msgLength += 2;
     msg[msgLength] = '\0';
-    currCulNo = msgLength * 10;
     Serial.print("msg ");
     Serial.println(msg);
-  }
+  }*/
 }
 void audio_bitrate(const char *info) {
   Serial.print("bitrate     ");
