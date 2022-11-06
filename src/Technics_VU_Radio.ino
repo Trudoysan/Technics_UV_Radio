@@ -13,7 +13,7 @@
 //#include <SPI.h>
 #include "soc/timer_group_struct.h"
 #include "soc/timer_group_reg.h"
-
+#include "Pass.h"
 
 //#define ADAFRUIT
 
@@ -104,10 +104,6 @@ double vReal[SAMPLES];
 double vImag[SAMPLES];
 unsigned long newTime;
 arduinoFFT FFT = arduinoFFT(vReal, vImag, SAMPLES, SAMPLING_FREQ);
-
-
-#define SSID "Hlava_RPT"
-#define PSK "hlavouni"
 
 #define STATIONS 15
 char *stationlist[STATIONS] = {
@@ -277,17 +273,17 @@ void TaskVUcode(void *pvParameters) {
         if (vReal[i] > NOISE) {                  // Add a crude noise filter
 
           //10 bands 40000/512= 39
-          //if (i <= 2) bandValues[0] += (int)vReal[i];               //0-0
-          //if (i > 2 && i <= 4) bandValues[1] += (int)vReal[i];      //1-1
-          //if (i > 4 && i <= 7) bandValues[2] += (int)vReal[i];      //2-3
-          //if (i > 7 && i <= 12) bandValues[3] += (int)vReal[i];     //4-7
-          //if (i > 12 && i <= 21) bandValues[4] += (int)vReal[i];    //8-15
-          //if (i > 21 && i <= 38) bandValues[5] += (int)vReal[i];    //16-31
-          //if (i > 38 && i <= 72) bandValues[6] += (int)vReal[i];    //32-63
-          //if (i > 72 && i <= 138) bandValues[7] += (int)vReal[i];   //64-127
-          //if (i > 138 && i <= 240) bandValues[8] += (int)vReal[i];  //128-255
-          //if (i > 240) bandValues[9] += (int)vReal[i];              //256-512
-          if (i <= 4) bandValues[0] += (int)vReal[i];
+          if (i <= 2) bandValues[0] += (int)vReal[i];               //0-0
+          if (i > 2 && i <= 4) bandValues[1] += (int)vReal[i];      //1-1
+          if (i > 4 && i <= 7) bandValues[2] += (int)vReal[i];      //2-3
+          if (i > 7 && i <= 12) bandValues[3] += (int)vReal[i];     //4-7
+          if (i > 12 && i <= 21) bandValues[4] += (int)vReal[i];    //8-15
+          if (i > 21 && i <= 38) bandValues[5] += (int)vReal[i];    //16-31
+          if (i > 38 && i <= 72) bandValues[6] += (int)vReal[i];    //32-63
+          if (i > 72 && i <= 138) bandValues[7] += (int)vReal[i];   //64-127
+          if (i > 138 && i <= 240) bandValues[8] += (int)vReal[i];  //128-255
+          if (i > 240) bandValues[9] += (int)vReal[i];              //256-512
+          /*if (i <= 4) bandValues[0] += (int)vReal[i];
           if (i > 4 && i <= 8) bandValues[1] += (int)vReal[i];
           if (i > 8 && i <= 18) bandValues[2] += (int)vReal[i];
           if (i > 18 && i <= 37) bandValues[3] += (int)vReal[i];
@@ -296,7 +292,7 @@ void TaskVUcode(void *pvParameters) {
           if (i > 115 && i <= 200) bandValues[6] += (int)vReal[i];
           if (i > 200 && i <= 240) bandValues[7] += (int)vReal[i];
           if (i > 280 && i <= 400) bandValues[8] += (int)vReal[i];
-          if (i > 400) bandValues[9] += (int)vReal[i];
+          if (i > 400) bandValues[9] += (int)vReal[i];*/
         }
       }
 
