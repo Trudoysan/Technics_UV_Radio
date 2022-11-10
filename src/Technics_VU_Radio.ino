@@ -17,20 +17,20 @@
 
 #ifdef ADAFRUIT
 #include <Adafruit_NeoPixel.h>
-#else //ADAFRUIT-RMT
+#else  //ADAFRUIT-RMT
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "esp32-hal.h"
-#endif //RMT
+#endif  //RMT
 
 //#define AUDIO_IN_PIN 36  // Signal in on this pin - ADC1_CHANNEL_0
 #define WS_PIN 13
 
 #define ST_UP_PIN 32     // In.  OK_OK_OK_OK
 #define ST_DOWN_PIN 33   // In  OK_OK_OK_OK
-#define LVL_UP_PIN 5     // 
-#define LVL_DOWN_PIN 21  // 
+#define LVL_UP_PIN 5     //
+#define LVL_DOWN_PIN 21  //
 int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
 #define NUM_BUTTONS 4
 
@@ -50,46 +50,46 @@ int buttonPins[] = { ST_UP_PIN, ST_DOWN_PIN, LVL_UP_PIN, LVL_DOWN_PIN };
 #define I2S_BCLK 27  // Bit clock
 #define I2S_LRC 25   // Left Right Clock
 
-#define SAMPLES 1024  // Must be a power of 2
+#define SAMPLES 1024         // Must be a power of 2
 #define SAMPLING_FREQ 40000  // Hz, must be 40000 or less due to ADC conversion time
 int amplitude = 1000;        // Depending on your audio source level
 
 Audio audio;
 
 Preferences pref;
-int infolnc = 0;         //stores channel number for tuner
+int infolnc = 0;  //stores channel number for tuner
 
 bool bar = 1, top = 1, radioOn, VUon;
 
 #ifdef SONG_NAME
-#define SONG_PIN 15  
- bool songName;
- int currCulNo = 0;
+#define SONG_PIN 15
+bool songName;
+int currCulNo = 0;
 char msg[50];
-#endif //SONG_NAME
+#endif  //SONG_NAME
 
-#define NUM_BANDS 10  
+#define NUM_BANDS 10
 #define TOP 18
 #define NUM_LEDS (NUM_BANDS * TOP)  // Total number of LEDs
 
 #ifdef ADAFRUIT
 int ledBrightness = 32;  //store led Brightness, maybe different for different colours?
 Adafruit_NeoPixel pixels(NUM_LEDS / 3, WS_PIN, NEO_GRB + NEO_KHZ800);
-#else //ADAFRUIT-RMT
+#else  //ADAFRUIT-RMT
 #define NR_OF_ALL_BITS 24 * (NUM_LEDS / 3)
 rmt_data_t led_data[NR_OF_ALL_BITS];
 rmt_obj_t *rmt_send = NULL;
-#endif //RMT
+#endif  //RMT
 
 // Sampling and FFT stuff
-unsigned int sampling_period_us; 
+unsigned int sampling_period_us;
 byte peak[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };  // The length of these arrays must be >= NUM_BANDS
 int oldBarHeights[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 int bandValues[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 int bandMin[] = { __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__ };
 int bandMax[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-int bandMinSample[band] = { __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__ };
-int bandMaxSample[band] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+int bandMinSample[] = { __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__ };
+int bandMaxSample[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 int totalMin = __INT_MAX__;
 int totalMax = 0;
 double vReal[SAMPLES];
@@ -120,7 +120,7 @@ void TaskAudiocode(void *pvParameters) {
 #ifdef DEBUG
   Serial.print("TaskAudio running on core ");
   Serial.println(xPortGetCoreID());
-#endif //DEBUG
+#endif  //DEBUG
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(21);  // 0...21
 #ifdef DEBUG
@@ -128,7 +128,7 @@ void TaskAudiocode(void *pvParameters) {
   Serial.print(radioOn);
   Serial.print(" on station: ");
   Serial.println(infolnc);
-#endif //DEBUG
+#endif  //DEBUG
   if (!radioOn)
     audio.connecttohost(stationlist[infolnc]);
 
@@ -194,7 +194,7 @@ void setLedOff(int number) {
 TaskHandle_t TaskVU;
 void TaskVUcode(void *pvParameters) {
   static unsigned long lastTime;
-  static int sampleNo=1;
+  static int sampleNo = 1;
   for (;;) {
 #ifdef SONG_NAME
     if (currCulNo) {
@@ -231,31 +231,31 @@ void TaskVUcode(void *pvParameters) {
           }
         }
       }
-    } else 
-#endif //SONG_NAME
-    if (!VUon) {
-      // Reset bandValues[]
-      for (int i = 0; i < NUM_BANDS; i++) {
-        bandValues[i] = 0;
-      }
-      unsigned long newTime;
-      // Sample the audio pin
-      for (int i = 0; i < SAMPLES; i++) {
-         newTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
-        vReal[i] = adc1_get_raw(ADC1_CHANNEL_0);
-        vImag[i] = 0;
-        while ((xTaskGetTickCount() * portTICK_PERIOD_MS - newTime) < sampling_period_us) {}
-      }
+    } else
+#endif  //SONG_NAME
+      if (!VUon) {
+        // Reset bandValues[]
+        for (int i = 0; i < NUM_BANDS; i++) {
+          bandValues[i] = 0;
+        }
+        unsigned long newTime;
+        // Sample the audio pin
+        for (int i = 0; i < SAMPLES; i++) {
+          newTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
+          vReal[i] = adc1_get_raw(ADC1_CHANNEL_0);
+          vImag[i] = 0;
+          while ((xTaskGetTickCount() * portTICK_PERIOD_MS - newTime) < sampling_period_us) {}
+        }
 
-      // Compute FFT
-      FFT.DCRemoval();
-      FFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
-      FFT.Compute(FFT_FORWARD);
-      FFT.ComplexToMagnitude();
+        // Compute FFT
+        FFT.DCRemoval();
+        FFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+        FFT.Compute(FFT_FORWARD);
+        FFT.ComplexToMagnitude();
 
-      // Analyse FFT results
-      for (int i = 2; i < (SAMPLES / 2); i++) {  // Don't use sample 0 and only first SAMPLES/2 are usable. Each array element represents a frequency bin and its value the amplitude.
-#ifdef DYNAMIC_AMP        
+        // Analyse FFT results
+        for (int i = 2; i < (SAMPLES / 2); i++) {  // Don't use sample 0 and only first SAMPLES/2 are usable. Each array element represents a frequency bin and its value the amplitude.
+#ifdef DYNAMIC_AMP
           if (i <= 2) bandValues[0] += (int)vReal[i];               //0-0
           if (i > 2 && i <= 4) bandValues[1] += (int)vReal[i];      //1-1
           if (i > 4 && i <= 7) bandValues[2] += (int)vReal[i];      //2-3
@@ -266,8 +266,8 @@ void TaskVUcode(void *pvParameters) {
           if (i > 72 && i <= 138) bandValues[7] += (int)vReal[i];   //64-127
           if (i > 138 && i <= 240) bandValues[8] += (int)vReal[i];  //128-255
           if (i > 240) bandValues[9] += (int)vReal[i];              //256-512
-#else //DYNAMIC_AMP     
-        if (vReal[i] > amplitude / 5) {          // Cut of noise
+#else                                                               //DYNAMIC_AMP
+        if (vReal[i] > amplitude / 5) {  // Cut of noise
           vReal[i] = (vReal[i] - amplitude / 5);
           //10 bands 40000/512= 39
           if (i <= 2) bandValues[0] += (int)vReal[i];               //0-0
@@ -291,74 +291,74 @@ void TaskVUcode(void *pvParameters) {
           if (i > 280 && i <= 400) bandValues[8] += (int)vReal[i];
           if (i > 400) bandValues[9] += (int)vReal[i];*/
         }
-#endif //DYNAMIC_AMP
-      }
-
-      // Process the FFT data into bar heights
-      for (byte band = 0; band < NUM_BANDS; band++) {
-#ifdef DYNAMIC_AMP  
-        if(sampleNo%40){ 
-          if(bandMinSample[band]>bandValues[band]){  //select max/min every second
-            bandMinSample[band]=bandValues[band];
-          }
-          if(bandMaxSample[band]<bandValues[band]){
-            bandMaxSample[band]=bandValues[band];
-          }
-          sampleNo++;
-        }else{
-          bandMin[band]=((bandMin[band]*9+bandMinSample[band])/10); //calculate average min/max
-          bandMax[band]=((bandMax[band]*9+bandMaxSample[band])/10);
-          totalMin =(totalMin*9+bandMin[band])/10;  //total average min/max
-          totalMax =(totalMax*9+bandMax[band])/10;
-          sampleNo = 1;
-#ifdef DEBUG
-          Serial.print("Band min-max ");
-          Serial.print(bandMinSample[band]);
-          Serial.print(" ");
-          Serial.print(bandMaxSample[band]);
-          Serial.print(" ");          
-          Serial.print(bandMin[band]);          
-          Serial.print(" ");
-          Serial.print(bandMax[band]);
-          Serial.print(" ");          
-          Serial.print(totalMin);          
-          Serial.print(" ");
-          Serial.println(totalMax);
-#endif //DEBUG
-          bandMinSample[band] = __INT_MAX__;
-          bandMaxSample[band] = 0;
+#endif                                                              //DYNAMIC_AMP
         }
-        int min = (bandMin[band]>(totalMin*2))?bandMin[band]*2:bandMin[band];
-        int max = (bandMax[band]>(totalMax*2))?bandMax[band]*2:bandMax[band];
-        if(min<(totalMin/2)) min = totalMin/2;
-        if(max<(totalMax/2)) max = totalMax/2;
 
-        int barHeight = ((TOP+1)*(bandValues[band]-min)) / (max-min);
-        if (barHeight < 0) barHeight = 0;
+        // Process the FFT data into bar heights
+        for (byte band = 0; band < NUM_BANDS; band++) {
+#ifdef DYNAMIC_AMP
+          if (sampleNo % 40) {
+            if (bandMinSample[band] > bandValues[band]) {  //select max/min every second
+              bandMinSample[band] = bandValues[band];
+            }
+            if (bandMaxSample[band] < bandValues[band]) {
+              bandMaxSample[band] = bandValues[band];
+            }
+            sampleNo++;
+          } else {
+            bandMin[band] = ((bandMin[band] * 9 + bandMinSample[band]) / 10);  //calculate average min/max
+            bandMax[band] = ((bandMax[band] * 9 + bandMaxSample[band]) / 10);
+            totalMin = (totalMin * 9 + bandMin[band]) / 10;  //total average min/max
+            totalMax = (totalMax * 9 + bandMax[band]) / 10;
+            sampleNo = 1;
+#ifdef DEBUG
+            Serial.print("Band min-max ");
+            Serial.print(bandMinSample[band]);
+            Serial.print(" ");
+            Serial.print(bandMaxSample[band]);
+            Serial.print(" ");
+            Serial.print(bandMin[band]);
+            Serial.print(" ");
+            Serial.print(bandMax[band]);
+            Serial.print(" ");
+            Serial.print(totalMin);
+            Serial.print(" ");
+            Serial.println(totalMax);
+#endif  //DEBUG
+            bandMinSample[band] = __INT_MAX__;
+            bandMaxSample[band] = 0;
+          }
+          int minV = (bandMin[band] > (totalMin * 2)) ? bandMin[band] * 2 : bandMin[band];
+          int maxV = (bandMax[band] > (totalMax * 2)) ? bandMax[band] * 2 : bandMax[band];
+          if (minV < (totalMin / 2)) minV = totalMin / 2;
+          if (maxV < (totalMax / 2)) maxV = totalMax / 2;
 
-#else //DYNAMIC_AMP  
+          int barHeight = ((TOP + 1) * (bandValues[band] - minV)) / (maxV - minV);
+          if (barHeight < 0) barHeight = 0;
+
+#else   //DYNAMIC_AMP \
         // Scale the bars for the display
         int barHeight = bandValues[band] / amplitude;
-#endif //DYNAMIC_AMP
-        if (barHeight > TOP) barHeight = TOP;
+#endif  //DYNAMIC_AMP
+          if (barHeight > TOP) barHeight = TOP;
 
-        // Small amount of averaging between frames
-        barHeight = ((oldBarHeights[band] * 1) + barHeight) / 2;
+          // Small amount of averaging between frames
+          barHeight = ((oldBarHeights[band] * 1) + barHeight) / 2;
 
-        // Move peak up
-        if (barHeight > peak[band]) {
-          peak[band] = min(TOP, barHeight);
-        }
+          // Move peak up
+          if (barHeight > peak[band]) {
+            peak[band] = min(TOP, barHeight);
+          }
 
-        // Draw bars
+          // Draw bars
 #ifdef ADAFRUIT
-        for (int i = 0; i < TOP; i += 3) {
-          pixels.setPixelColor(59 - (((band * TOP) + i) / 3),
-                               pixels.Color(((barHeight > i + 1 && !bar) || (peak[band] == i + 2 && !top)) ? ledBrightness : 0,
-                                            ((barHeight > i && !bar) || (peak[band] == i + 1 && !top)) ? ledBrightness : 0,
-                                            ((barHeight > i + 2 && !bar) || (peak[band] == i + 3 && !top)) ? ledBrightness : 0));
-        }
-#else //ADAFRUIT-RMT
+          for (int i = 0; i < TOP; i += 3) {
+            pixels.setPixelColor(59 - (((band * TOP) + i) / 3),
+                                 pixels.Color(((barHeight > i + 1 && !bar) || (peak[band] == i + 2 && !top)) ? ledBrightness : 0,
+                                              ((barHeight > i && !bar) || (peak[band] == i + 1 && !top)) ? ledBrightness : 0,
+                                              ((barHeight > i + 2 && !bar) || (peak[band] == i + 3 && !top)) ? ledBrightness : 0));
+          }
+#else   //ADAFRUIT-RMT
         for (int i = 0; i < TOP; i++) {
           //int bit;
           int j = swapLED(179 - ((band * TOP) + i)) * 8;
@@ -369,37 +369,37 @@ void TaskVUcode(void *pvParameters) {
             setLedOff(j);
           }
         }
-#endif //RMT
-        // Save oldBarHeights for averaging later
-        oldBarHeights[band] = barHeight;
-      }
+#endif  //RMT \
+  // Save oldBarHeights for averaging later
+          oldBarHeights[band] = barHeight;
+        }
 #ifdef ADAFRUIT
-      pixels.show();
-#else //ADAFRUIT-RMT
-      // Send the data
+        pixels.show();
+#else   //ADAFRUIT-RMT \
+        // Send the data
       rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
-#endif //RMT
-      // Decay peak
-      unsigned long nowMillisTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
-      if (nowMillisTime - lastTime > 180) {  //60
-        for (byte band = 0; band < NUM_BANDS; band++)
-          if (peak[band] > 0) peak[band] -= 1;
-        lastTime = nowMillisTime;
-      }
-    } else {
+#endif  //RMT \
+  // Decay peak
+        unsigned long nowMillisTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        if (nowMillisTime - lastTime > 180) {  //60
+          for (byte band = 0; band < NUM_BANDS; band++)
+            if (peak[band] > 0) peak[band] -= 1;
+          lastTime = nowMillisTime;
+        }
+      } else {
 #ifdef ADAFRUIT
-      pixels.clear();
-#else //ADAFRUIT-RMT
+        pixels.clear();
+#else   //ADAFRUIT-RMT
       for (int j = 0; j < 179 * 8; j += 8)
         setLedOff(j);
       rmtWrite(rmt_send, led_data, NR_OF_ALL_BITS);
-#endif //RMT
-    }
+#endif  //RMT
+      }
     feedTheDog();
   }
 }
 
-void strtLedAnimation(void){
+void strtLedAnimation(void) {
   for (int k = 0; k < 9 + TOP * 2; k++) {
     for (int band = 0; band < NUM_BANDS; band++) {
       for (int i = 0; i < TOP; i++) {
@@ -438,18 +438,20 @@ void setup() {
   //set current amplitude
   if (pref.isKey("amplitude")) amplitude = pref.getUShort("amplitude");
   if (amplitude < 10) amplitude = 10;
-  //set station 
+  //set station
   if (pref.isKey("station")) infolnc = pref.getUShort("station");
   if (infolnc >= STATIONS) infolnc = 0;
 
-  sampling_period_us = round(1000000 * (1.0 / SAMPLING_FREQ));  
+  sampling_period_us = round(1000000 * (1.0 / SAMPLING_FREQ));
 
   for (int i = 0; i < NUM_BUTTONS; i++)
     pinMode(buttonPins[i], INPUT_PULLUP);
   pinMode(TOP_PIN, INPUT_PULLUP);
   pinMode(BAR_PIN, INPUT_PULLUP);
   pinMode(RADIO_PIN, INPUT_PULLUP);
+#ifdef SONG_NAME
   pinMode(SONG_PIN, INPUT_PULLUP);
+#endif  //SONG_NAME
   //pinMode(AUDIO_IN_PIN, INPUT);  // Signal in on this pin
   adc1_config_width(ADC_WIDTH_BIT_12);
   adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
@@ -462,7 +464,7 @@ void setup() {
   pixels.begin();  // INITIALIZE NeoPixel strip object (REQUIRED)
   pixels.clear();
   pixels.show();
-#else //ADAFRUIT-RMT
+#else   //ADAFRUIT-RMT
   Serial.println("rmtInit");
   if ((rmt_send = rmtInit(WS_PIN, RMT_TX_MODE, RMT_MEM_64)) == NULL) {
     Serial.println("init sender failed\n");
@@ -470,7 +472,7 @@ void setup() {
   float realTick = rmtSetTick(rmt_send, 100);
   Serial.printf("real tick set to: %fns\n", realTick);
   strtLedAnimation();
-#endif //RMT
+#endif  //RMT
   Serial.println("Leds startup ends");
   radioOn = -1;  // to light up LEDs on buttons
   VUon = -1;
@@ -522,7 +524,7 @@ void buttonCheck() {
 #ifdef DEBUG
           Serial.print("Pin: ");
           Serial.println(i);
-#endif //DEBUG
+#endif  //DEBUG
           switch (i) {
             case 0:  //ST_UP_PIN
               stationUpDown(1);
@@ -556,12 +558,12 @@ void buttonCheck() {
 #ifdef DEBUG
     Serial.print("radioOn de-activated: ");
     Serial.println(radioOn);
-#endif //DEBUG
+#endif  //DEBUG
   }
 
 #ifdef SONG_NAME
   songName = digitalRead(SONG_PIN);
-#endif //SONG_NAME
+#endif  //SONG_NAME
 
   if (VUon != digitalRead(VU_PIN)) {
     if (VUon != -1)
@@ -578,7 +580,7 @@ void buttonCheck() {
 #ifdef DEBUG
     Serial.print("VUon de-activated: ");
     Serial.println(VUon);
-#endif //DEBUG
+#endif  //DEBUG
   }
   if (top != digitalRead(TOP_PIN)) {
     if (top != -1)
@@ -590,7 +592,7 @@ void buttonCheck() {
 #ifdef DEBUG
     Serial.print("Top de-activated: ");
     Serial.println(top);
-#endif //DEBUG
+#endif  //DEBUG
   }
 
   if (bar != digitalRead(BAR_PIN)) {
@@ -603,7 +605,7 @@ void buttonCheck() {
 #ifdef DEBUG
     Serial.print("Bar de-activated: ");
     Serial.println(bar);
-#endif //DEBUG
+#endif  //DEBUG
   }
 }
 
@@ -622,7 +624,7 @@ void VUsetting(int pinNumber) {
 #ifdef DEBUG
   Serial.print("Pin activated: ");
   Serial.println(pinNumber);
-#endif //DEBUG
+#endif  //DEBUG
 }
 
 void stationUpDown(int upDown) {
@@ -637,7 +639,7 @@ void stationUpDown(int upDown) {
     audio.connecttohost(stationlist[infolnc]);
 #ifdef DEBUG
     Serial.println(infolnc);
-#endif //DEBUG
+#endif  //DEBUG
   }
 }
 
@@ -1151,7 +1153,7 @@ void drawLineT(int bar, char pismeno, int sloupec) {
     // Serial.println("");
   }
 }
-#endif //SONG_NAME
+#endif  //SONG_NAME
 
 // optional
 void audio_info(const char *info) {
@@ -1196,7 +1198,7 @@ void audio_showstreamtitle(const char *info) {
     Serial.print("msg ");
     Serial.println(msg);
   }
-  #endif //SONG_NAME
+#endif  //SONG_NAME
 }
 void audio_bitrate(const char *info) {
   Serial.print("bitrate     ");
