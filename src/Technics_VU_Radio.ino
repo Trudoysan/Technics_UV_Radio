@@ -86,12 +86,12 @@ unsigned int sampling_period_us;
 byte peak[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };  // The length of these arrays must be >= NUM_BANDS
 int oldBarHeights[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 int bandValues[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-int bandMin[] = { __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__ };
-int bandMax[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+int bandMin[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+int bandMax[] = { 25000, 25000, 25000, 50000, 75000, 75000, 75000, 75000, 75000, 75000, 75000 };
 int bandMinSample[] = { __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__, __INT_MAX__ };
 int bandMaxSample[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-int totalMin = __INT_MAX__;
-int totalMax = 0;
+//int totalMin = __INT_MAX__;
+//int totalMax = 0;
 double vReal[SAMPLES];
 double vImag[SAMPLES];
 arduinoFFT FFT = arduinoFFT(vReal, vImag, SAMPLES, SAMPLING_FREQ);
@@ -194,7 +194,7 @@ void setLedOff(int number) {
 TaskHandle_t TaskVU;
 void TaskVUcode(void *pvParameters) {
   static unsigned long lastTime;
-  static int sampleNo = 1;
+  static int sampleNo;
   for (;;) {
 #ifdef SONG_NAME
     if (currCulNo) {
@@ -238,13 +238,15 @@ void TaskVUcode(void *pvParameters) {
         for (int i = 0; i < NUM_BANDS; i++) {
           bandValues[i] = 0;
         }
-        unsigned long newTime;
+        //unsigned long newTime;
         // Sample the audio pin
         for (int i = 0; i < SAMPLES; i++) {
-          newTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
+          //newTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
           vReal[i] = adc1_get_raw(ADC1_CHANNEL_0);
           vImag[i] = 0;
-          while ((xTaskGetTickCount() * portTICK_PERIOD_MS - newTime) < sampling_period_us) {}
+          // while ((xTaskGetTickCount() * portTICK_PERIOD_MS - newTime) < sampling_period_us) {
+          //     vTaskDelay(1);
+          //}
         }
 
         // Compute FFT
@@ -256,16 +258,16 @@ void TaskVUcode(void *pvParameters) {
         // Analyse FFT results
         for (int i = 2; i < (SAMPLES / 2); i++) {  // Don't use sample 0 and only first SAMPLES/2 are usable. Each array element represents a frequency bin and its value the amplitude.
 #ifdef DYNAMIC_AMP
-          if (i <= 2) bandValues[0] += (int)vReal[i];               //0-0
-          if (i > 2 && i <= 4) bandValues[1] += (int)vReal[i];      //1-1
-          if (i > 4 && i <= 7) bandValues[2] += (int)vReal[i];      //2-3
-          if (i > 7 && i <= 12) bandValues[3] += (int)vReal[i];     //4-7
-          if (i > 12 && i <= 21) bandValues[4] += (int)vReal[i];    //8-15
-          if (i > 21 && i <= 38) bandValues[5] += (int)vReal[i];    //16-31
-          if (i > 38 && i <= 72) bandValues[6] += (int)vReal[i];    //32-63
-          if (i > 72 && i <= 138) bandValues[7] += (int)vReal[i];   //64-127
-          if (i > 138 && i <= 240) bandValues[8] += (int)vReal[i];  //128-255
-          if (i > 240) bandValues[9] += (int)vReal[i];              //256-512
+          if (i <= 4) bandValues[0] += (int)vReal[i];               //0-0
+          if (i > 4 && i <= 6) bandValues[1] += (int)vReal[i];      //1-1
+          if (i > 6 && i <= 10) bandValues[2] += (int)vReal[i];     //2-3
+          if (i > 10 && i <= 21) bandValues[3] += (int)vReal[i];    //4-7
+          if (i > 21 && i <= 42) bandValues[4] += (int)vReal[i];    //8-15
+          if (i > 42 && i <= 100) bandValues[5] += (int)vReal[i];   //16-31
+          if (i > 100 && i <= 170) bandValues[6] += (int)vReal[i];  //32-63
+          if (i > 170 && i <= 280) bandValues[7] += (int)vReal[i];  //64-127
+          if (i > 280 && i <= 390) bandValues[8] += (int)vReal[i];  //128-255
+          if (i > 390) bandValues[9] += (int)vReal[i];              //256-512
 #else                                                               //DYNAMIC_AMP
         if (vReal[i] > amplitude / 5) {  // Cut of noise
           vReal[i] = (vReal[i] - amplitude / 5);
@@ -293,49 +295,56 @@ void TaskVUcode(void *pvParameters) {
         }
 #endif                                                              //DYNAMIC_AMP
         }
-
+        sampleNo++;
+        if (sampleNo == 40) sampleNo = 0;
         // Process the FFT data into bar heights
         for (byte band = 0; band < NUM_BANDS; band++) {
 #ifdef DYNAMIC_AMP
-          if (sampleNo % 40) {
+          if (sampleNo) {
+            /*              Serial.print(band);
+            Serial.print(" ");
+                        Serial.print(bandValues[band]);
+            Serial.println("");*/
             if (bandMinSample[band] > bandValues[band]) {  //select max/min every second
               bandMinSample[band] = bandValues[band];
             }
             if (bandMaxSample[band] < bandValues[band]) {
               bandMaxSample[band] = bandValues[band];
             }
-            sampleNo++;
+
           } else {
             bandMin[band] = ((bandMin[band] * 9 + bandMinSample[band]) / 10);  //calculate average min/max
             bandMax[band] = ((bandMax[band] * 9 + bandMaxSample[band]) / 10);
-            totalMin = (totalMin * 9 + bandMin[band]) / 10;  //total average min/max
-            totalMax = (totalMax * 9 + bandMax[band]) / 10;
-            sampleNo = 1;
+            // totalMin = (totalMin * 9 + bandMin[band]) / 10;  //total average min/max
+            // totalMax = (totalMax * 9 + bandMax[band]) / 10;
+
 #ifdef DEBUG
-            Serial.print("Band min-max ");
+            Serial.print("Band:");
+            Serial.print(band);
+            Serial.print("\t");
             Serial.print(bandMinSample[band]);
-            Serial.print(" ");
+            Serial.print("\t");
             Serial.print(bandMaxSample[band]);
-            Serial.print(" ");
+            Serial.print("\t");
             Serial.print(bandMin[band]);
-            Serial.print(" ");
+            Serial.print("\t");
             Serial.print(bandMax[band]);
-            Serial.print(" ");
-            Serial.print(totalMin);
-            Serial.print(" ");
-            Serial.println(totalMax);
+            //Serial.print("\t");
+            //Serial.print(totalMin);
+            //Serial.print("\t");
+            //Serial.println(totalMax);
+            Serial.println("");
 #endif  //DEBUG
             bandMinSample[band] = __INT_MAX__;
             bandMaxSample[band] = 0;
           }
-          int minV = (bandMin[band] > (totalMin * 2)) ? bandMin[band] * 2 : bandMin[band];
-          int maxV = (bandMax[band] > (totalMax * 2)) ? bandMax[band] * 2 : bandMax[band];
-          if (minV < (totalMin / 2)) minV = totalMin / 2;
-          if (maxV < (totalMax / 2)) maxV = totalMax / 2;
-
-          int barHeight = ((TOP + 1) * (bandValues[band] - minV)) / (maxV - minV);
+          // int minV = (bandMin[band] > (totalMin * 2)) ? bandMin[band] * 2 : bandMin[band];
+          // int maxV = (bandMax[band] > (totalMax * 2)) ? bandMax[band] * 2 : bandMax[band];
+          // if (minV < (totalMin / 2)) minV = totalMin / 2;
+          // if (maxV < (totalMax / 2)) maxV = totalMax / 2;
+          //int barHeight = ((TOP + 1) * (bandValues[band] - minV)) / (maxV - minV);
+          int barHeight = ((TOP + 1) * (bandValues[band] - bandMin[band])) / (bandMax[band] - bandMin[band]);
           if (barHeight < 0) barHeight = 0;
-
 #else   //DYNAMIC_AMP \
         // Scale the bars for the display
         int barHeight = bandValues[band] / amplitude;
@@ -343,7 +352,7 @@ void TaskVUcode(void *pvParameters) {
           if (barHeight > TOP) barHeight = TOP;
 
           // Small amount of averaging between frames
-          barHeight = ((oldBarHeights[band] * 1) + barHeight) / 2;
+          barHeight = ((oldBarHeights[band] * 1) + barHeight * 2) / 3;
 
           // Move peak up
           if (barHeight > peak[band]) {
@@ -454,7 +463,8 @@ void setup() {
 #endif  //SONG_NAME
   //pinMode(AUDIO_IN_PIN, INPUT);  // Signal in on this pin
   adc1_config_width(ADC_WIDTH_BIT_12);
-  adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
+  adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_2_5);
+  //adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
   pinMode(BAR_LED_PIN, OUTPUT);
   pinMode(TOP_LED_PIN, OUTPUT);
   pinMode(RADIO_LED_PIN, OUTPUT);
